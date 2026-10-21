@@ -417,9 +417,41 @@ elif menu == "🔐 Hindura Password":
 # =========================================================
 # PART 4: ADMIN USER MANAGEMENT
 # =========================================================
+# =========================================================
+# PART 4: ADMIN USER MANAGEMENT
+# =========================================================
 elif menu == "👥 Gucunga Abakoresha (Users)" and st.session_state.role == "Admin":
     st.title("👥 Gucunga Abakoresha na Roles (User Management)")
     
+    # ➕ Form yo kwandika umukoresha gishya binyuze kuri Admin
+    with st.expander("➕ Ongeza Umukoresha Gishya (Add User)"):
+        add_user = st.text_input("Username Nshya")
+        add_pass = st.text_input("Password", type="password")
+        add_role = st.selectbox("Hitamo Role", ["Staff", "Admin"])
+        
+        if st.button("Bika Umukoresha"):
+            if add_user and add_pass:
+                check_msg = validate_password(add_pass)
+                if check_msg != "OK":
+                    st.error(check_msg)
+                else:
+                    hashed = hash_password(add_pass)
+                    try:
+                        supabase.table("users").insert({
+                            "username": add_user,
+                            "password_hash": hashed,
+                            "role": add_role
+                        }).execute()
+                        st.success(f"Umukoresha {add_user} yongewe neza nka {add_role}!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Habaye ikibazo cyangwa username isanzweho: {e}")
+            else:
+                st.error("Zuza amakuru yose!")
+
+    st.markdown("---")
+    
+    # Urutonde rw'abakoresha
     df_users = fetch_data("users")
     if not df_users.empty:
         st.subheader("📋 Urutonde rw'Abakoresha ba System")
