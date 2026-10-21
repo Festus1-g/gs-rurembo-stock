@@ -73,7 +73,6 @@ if not st.session_state.logged_in:
             password = st.text_input("Password", type="password")
             
             if st.button("Login", use_container_width=True):
-                # Check default admin/staff or database users
                 if username == "admin" and password == "123":
                     st.session_state.logged_in = True
                     st.session_state.username = "admin"
@@ -85,7 +84,6 @@ if not st.session_state.logged_in:
                     st.session_state.role = "Staff"
                     st.rerun()
                 else:
-                    # Check in Supabase users table
                     df_users = fetch_data("users")
                     if not df_users.empty and "username" in df_users.columns:
                         user_row = df_users[df_users["username"] == username]
@@ -117,7 +115,6 @@ if not st.session_state.logged_in:
                     if check_msg != "OK":
                         st.error(check_msg)
                     else:
-                        # Check if user already exists
                         df_users = fetch_data("users")
                         if not df_users.empty and "username" in df_users.columns and new_user in df_users["username"].values:
                             st.error("Uyu username isanzwe ikoreshwa, hitamo undi!")
@@ -132,7 +129,7 @@ if not st.session_state.logged_in:
     st.stop()
 
 # ---------------------------------------------------------
-# MAIN APP NAVIGATION (COMBINED STOCK & HR)
+# MAIN APP NAVIGATION (COMBINED STOCK, HR & SECURITY)
 # ---------------------------------------------------------
 st.sidebar.title(f"👤 {st.session_state.username.capitalize()} ({st.session_state.role})")
 if st.sidebar.button("Log out"):
@@ -147,7 +144,8 @@ menu = st.sidebar.selectbox("Hitamo Igice (Menu)", [
     "📌 HR Dashboard", 
     "👨‍💼 Abakozi n'Amasezerano", 
     "📝 Gusaba Impushya (Leaves)", 
-    "💵 Imishahara (Payroll & Payslip)"
+    "💵 Imishahara (Payroll & Payslip)",
+    "🔐 Hindura Password"
 ])
 
 # =========================================================
@@ -370,3 +368,54 @@ elif menu == "💵 Imishahara (Payroll & Payslip)":
             ---
             ### **NET SALARY:** {staff_row['Net Salary']:,.0f} RWF
             """)
+
+# =========================================================
+# PART 3: CHANGE PASSWORD FEATURE
+# =========================================================
+elif menu == "🔐 Hindura Password":
+    st.title("🔐 Guhindura Password ya Konti yawe")
+    
+    current_pass = st.text_input("Password ya Kera (Current Password)", type="password")
+    new_pass = st.text_input("Password Nshya (New Password)", type="password")
+    confirm_new_pass = st.text_input("Emeza Password Nshya", type="password")
+    
+    st.info("💡 **Ibisabwa:** Byibuze nyuguti 8, irimo nyuguti nkuru na nto, imibare, n'ibimenyetso.")
+    
+    if st.button("Hindura Password"):
+        if not current_pass or not new_pass:
+            st.error("Ugomba kuzuza imyanya yose!")
+        elif new_pass != confirm_new_pass:
+            st.error("Password nshya wavuze ntizihuye!")
+        else:
+            # Check default admin/staff if applicable, or database users
+            if st.session_state.username in ["admin", "staff"]:
+                if current_pass == "123":
+                    check_msg = validate_password(new_pass)
+                    if check_msg != "OK":
+                        st.error(check_msg)
+                    else:
+                        new_hash = hash_password(new_pass)
+                        # Save as custom user in Supabase
+                        supabase.table("users").insert({
+                            "username": st.session_state.username,
+                            "password_hash": new_hash,
+                            "role": st.session_state.role
+                        }).execute()
+                        st.success("Password yawe yahinduwe neza cyane!")
+                else:
+                    st.error("Password ya kera wanditse si yo!")
+            else:
+                df_users = fetch_data("users")
+                user_row = df_users[df_users["username"] == st.session_state.username]
+                if not user_row.empty:
+                    stored_hash = user_row.iloc[0]["password_hash"]
+                    if stored_hash != hash_password(current_pass):
+                        st.error("Password ya kera wanditse si yo!")
+                    else:
+                        check_msg = validate_password(new_pass)
+                        if check_msg != "OK":
+                            st.error(check_msg)
+                        else:
+                            new_hash = hash_password(new_pass)
+                            supabase.table("users").update({"password_hash": new_hash}).eq("username", st.session_state.username).execute()
+                            st.success("Password yawe yahinduwe neza cyane!")
