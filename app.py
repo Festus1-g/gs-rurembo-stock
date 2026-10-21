@@ -59,7 +59,7 @@ if "logged_in" not in st.session_state:
     st.session_state.role = ""
 
 # ---------------------------------------------------------
-# LOGIN & SIGN-UP PAGE
+# LOGIN & SECURE SIGN-UP PAGE
 # ---------------------------------------------------------
 if not st.session_state.logged_in:
     st.title("🔒 GS Rurembo - System Authentication")
@@ -96,14 +96,13 @@ if not st.session_state.logged_in:
                                 st.rerun()
                     st.error("Username cyangwa Password sibyo!")
                     
-        else: # Sign Up
-            st.subheader("Kora Konti Nshya")
+        else: # Secure Sign Up (Role is strictly defaulted to 'Staff')
+            st.subheader("Kora Konti Nshya (Staff Account)")
             new_user = st.text_input("Hitamo Username")
             new_pass = st.text_input("Hitamo Password Ikomeye", type="password")
             confirm_pass = st.text_input("Emeza Password", type="password")
-            role_choice = st.selectbox("Hitamo Urwego (Role)", ["Staff", "Admin"])
             
-            st.info("💡 **Ibisabwa kuri Password:** Byibuze nyuguti 8, irimo nyuguti nkuru na nto, imibare, n'ibimenyetso.")
+            st.info("💡 **Ibisabwa kuri Password:** Byibuze nyuguti 8, irimo nyuguti nkuru na nto, imibare, n'ibimenyetso. *(Abiyandikisha bose batangira nka Staff)*")
             
             if st.button("Iyandikishe (Register)", use_container_width=True):
                 if not new_user or not new_pass:
@@ -123,20 +122,20 @@ if not st.session_state.logged_in:
                             supabase.table("users").insert({
                                 "username": new_user,
                                 "password_hash": hashed,
-                                "role": role_choice
+                                "role": "Staff" # Strictly Staff for security
                             }).execute()
-                            st.success("Konti yawe yaremwe neza! Ushobora kugaruka kuri 'Injira (Login)' ukagerageza kwinjira.")
+                            st.success("Konti yawe yaremwe nka Staff neza! Ushobora kugaruka kuri 'Injira (Login)' ukinjira.")
     st.stop()
 
 # ---------------------------------------------------------
-# MAIN APP NAVIGATION (COMBINED STOCK, HR & SECURITY)
+# MAIN APP NAVIGATION
 # ---------------------------------------------------------
 st.sidebar.title(f"👤 {st.session_state.username.capitalize()} ({st.session_state.role})")
 if st.sidebar.button("Log out"):
     st.session_state.logged_in = False
     st.rerun()
 
-menu = st.sidebar.selectbox("Hitamo Igice (Menu)", [
+menu_list = [
     "📊 Dashboard & Stock", 
     "📤 Direct Stock Out", 
     "📝 Staff Requests (Stock)", 
@@ -146,7 +145,13 @@ menu = st.sidebar.selectbox("Hitamo Igice (Menu)", [
     "📝 Gusaba Impushya (Leaves)", 
     "💵 Imishahara (Payroll & Payslip)",
     "🔐 Hindura Password"
-])
+]
+
+# Add Admin-only User Management menu if user is Admin
+if st.session_state.role == "Admin":
+    menu_list.append("👥 Gucunga Abakoresha (Users)")
+
+menu = st.sidebar.selectbox("Hitamo Igice (Menu)", menu_list)
 
 # =========================================================
 # PART 1: STOCK MANAGEMENT
@@ -387,7 +392,6 @@ elif menu == "🔐 Hindura Password":
         elif new_pass != confirm_new_pass:
             st.error("Password nshya wavuze ntizihuye!")
         else:
-            # Check default admin/staff if applicable, or database users
             if st.session_state.username in ["admin", "staff"]:
                 if current_pass == "123":
                     check_msg = validate_password(new_pass)
@@ -395,7 +399,6 @@ elif menu == "🔐 Hindura Password":
                         st.error(check_msg)
                     else:
                         new_hash = hash_password(new_pass)
-                        # Save as custom user in Supabase
                         supabase.table("users").insert({
                             "username": st.session_state.username,
                             "password_hash": new_hash,
@@ -419,3 +422,26 @@ elif menu == "🔐 Hindura Password":
                             new_hash = hash_password(new_pass)
                             supabase.table("users").update({"password_hash": new_hash}).eq("username", st.session_state.username).execute()
                             st.success("Password yawe yahinduwe neza cyane!")
+
+# =========================================================
+# PART 4: ADMIN USER MANAGEMENT (GUCUNGA ABAKOSEHA)
+# =========================================================
+elif menu == "👥 Gucunga Abakoresha (Users)" and st.session_state.role == "Admin":
+    st.title("👥 Gucunga Abakoresha na Roles (User Management)")
+    
+    df_users = fetch_data("users")
+    if not df_users.empty:
+        st.subheader("📋 Urutonde rw'Abakoresha ba System")
+        st.dataframe(df_users[["username", "role"]], use_container_width=True)
+        
+        st.markdown("---")
+        st.subheader("⚖️ Hindura Role y'Umukoresha (Promote/Demote Staff)")
+        selected_user = st.selectbox("Hitamo Username y'umukozi", df_users["username"].tolist())
+        new_role = st.selectbox("Hitamo Role nshya", ["Staff", "Admin"])
+        
+        if st.button("Vugurura Role y'Umukoresha"):
+            supabase.table("users").update({"role": new_role}).eq("username", selected_user).execute()
+            st.success(f"Role ya {selected_user} yahinduwe kuri '{new_role}' neza cyane!")
+            st.rerun()
+    else:
+        st.info("Nta bakoresha banditse muri database y'abiyandikishije.")
