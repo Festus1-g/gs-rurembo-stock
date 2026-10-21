@@ -96,7 +96,7 @@ if not st.session_state.logged_in:
                                 st.rerun()
                     st.error("Username cyangwa Password sibyo!")
                     
-        else: # Secure Sign Up (Role is strictly defaulted to 'Staff')
+        else: # Secure Sign Up using upsert
             st.subheader("Kora Konti Nshya (Staff Account)")
             new_user = st.text_input("Hitamo Username")
             new_pass = st.text_input("Hitamo Password Ikomeye", type="password")
@@ -114,17 +114,14 @@ if not st.session_state.logged_in:
                     if check_msg != "OK":
                         st.error(check_msg)
                     else:
-                        df_users = fetch_data("users")
-                        if not df_users.empty and "username" in df_users.columns and new_user in df_users["username"].values:
-                            st.error("Uyu username isanzwe ikoreshwa, hitamo undi!")
-                        else:
-                            hashed = hash_password(new_pass)
-                            supabase.table("users").insert({
-                                "username": new_user,
-                                "password_hash": hashed,
-                                "role": "Staff" # Strictly Staff for security
-                            }).execute()
-                            st.success("Konti yawe yaremwe nka Staff neza! Ushobora kugaruka kuri 'Injira (Login)' ukinjira.")
+                        hashed = hash_password(new_pass)
+                        # Using upsert to prevent errors
+                        supabase.table("users").upsert({
+                            "username": new_user,
+                            "password_hash": hashed,
+                            "role": "Staff"
+                        }, on_conflict="username").execute()
+                        st.success("Konti yawe yaremwe nka Staff neza! Ushobora kugaruka kuri 'Injira (Login)' ukinjira.")
     st.stop()
 
 # ---------------------------------------------------------
@@ -147,7 +144,6 @@ menu_list = [
     "🔐 Hindura Password"
 ]
 
-# Add Admin-only User Management menu if user is Admin
 if st.session_state.role == "Admin":
     menu_list.append("👥 Gucunga Abakoresha (Users)")
 
@@ -375,7 +371,7 @@ elif menu == "💵 Imishahara (Payroll & Payslip)":
             """)
 
 # =========================================================
-# PART 3: CHANGE PASSWORD FEATURE
+# PART 3: CHANGE PASSWORD FEATURE (Using Upsert)
 # =========================================================
 elif menu == "🔐 Hindura Password":
     st.title("🔐 Guhindura Password ya Konti yawe")
@@ -392,39 +388,39 @@ elif menu == "🔐 Hindura Password":
         elif new_pass != confirm_new_pass:
             st.error("Password nshya wavuze ntizihuye!")
         else:
-            if st.session_state.username in ["admin", "staff"]:
-                if current_pass == "123":
-                    check_msg = validate_password(new_pass)
-                    if check_msg != "OK":
-                        st.error(check_msg)
-                    else:
-                        new_hash = hash_password(new_pass)
-                        supabase.table("users").insert({
-                            "username": st.session_state.username,
-                            "password_hash": new_hash,
-                            "role": st.session_state.role
-                        }).execute()
-                        st.success("Password yawe yahinduwe neza cyane!")
-                else:
-                    st.error("Password ya kera wanditse si yo!")
+            check_msg = validate_password(new_pass)
+            if check_msg != "OK":
+                st.error(check_msg)
             else:
-                df_users = fetch_data("users")
-                user_row = df_users[df_users["username"] == st.session_state.username]
-                if not user_row.empty:
-                    stored_hash = user_row.iloc[0]["password_hash"]
-                    if stored_hash != hash_password(current_pass):
-                        st.error("Password ya kera wanditse si yo!")
+                # Validate current password
+                is_valid_old = False
+                if st.session_state.username in ["admin", "staff"]:
+                    if current_pass == "123":
+                        is_valid_old = True
                     else:
-                        check_msg = validate_password(new_pass)
-                        if check_msg != "OK":
-                            st.error(check_msg)
+                        st.error("Password ya kera wanditse si yo!")
+                else:
+                    df_users = fetch_data("users")
+                    user_row = df_users[df_users["username"] == st.session_state.username]
+                    if not user_row.empty:
+                        stored_hash = user_row.iloc[0]["password_hash"]
+                        if stored_hash == hash_password(current_pass):
+                            is_valid_old = True
                         else:
-                            new_hash = hash_password(new_pass)
-                            supabase.table("users").update({"password_hash": new_hash}).eq("username", st.session_state.username).execute()
-                            st.success("Password yawe yahinduwe neza cyane!")
+                            st.error("Password ya kera wanditse si yo!")
+                
+                if is_valid_old:
+                    new_hash = hash_password(new_pass)
+                    # Use upsert to safely update or insert user password without crashing
+                    supabase.table("users").upsert({
+                        "username": st.session_state.username,
+                        "password_hash": new_hash,
+                        "role": st.session_state.role
+                    }, on_conflict="username").execute()
+                    st.success("Password yawe yahinduwe neza cyane!")
 
 # =========================================================
-# PART 4: ADMIN USER MANAGEMENT (GUCUNGA ABAKOSEHA)
+# PART 4: ADMIN USER MANAGEMENT
 # =========================================================
 elif menu == "👥 Gucunga Abakoresha (Users)" and st.session_state.role == "Admin":
     st.title("👥 Gucunga Abakoresha na Roles (User Management)")
@@ -435,7 +431,7 @@ elif menu == "👥 Gucunga Abakoresha (Users)" and st.session_state.role == "Adm
         st.dataframe(df_users[["username", "role"]], use_container_width=True)
         
         st.markdown("---")
-        st.subheader("⚖️ Hindura Role y'Umukoresha (Promote/Demote Staff)")
+        st.subheader("⚖️ Hindura Role y'Umukoresha")
         selected_user = st.selectbox("Hitamo Username y'umukozi", df_users["username"].tolist())
         new_role = st.selectbox("Hitamo Role nshya", ["Staff", "Admin"])
         
@@ -444,4 +440,4 @@ elif menu == "👥 Gucunga Abakoresha (Users)" and st.session_state.role == "Adm
             st.success(f"Role ya {selected_user} yahinduwe kuri '{new_role}' neza cyane!")
             st.rerun()
     else:
-        st.info("Nta bakoresha banditse muri database y'abiyandikishije.")
+        st.info("Nta bakoresha banditse muri database.")
