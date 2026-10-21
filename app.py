@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 from supabase import create_client, Client
 from datetime import datetime
+import hashlib
+import re
 
 # Page Configuration
 st.set_page_config(page_title="GS Rurembo - Integrated Management System", layout="wide", page_icon="🏫")
@@ -24,6 +26,21 @@ def fetch_data(table_name):
     except Exception as e:
         return pd.DataFrame()
 
+# Password Strength Validator
+def validate_password(password):
+    if len(password) < 8:
+        return "Password igomba kuba ifite byibuze nyuguti 8."
+    if not re.search(r"[a-z]", password):
+        return "Password igomba kugira nibura nyuguti nto (a-z)."
+    if not re.search(r"[A-Z]", password):
+        return "Password igomba kugira nibura nyuguti nkuru (A-Z)."
+    if not re.search(r"[0-9]", password):
+        return "Password igomba kugira nibura umubare (0-9)."
+    return "OK"
+
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
 # Helper function for Rwandan PAYE Tax
 def calculate_tpr(taxable_income):
     if taxable_income <= 60000:
@@ -42,29 +59,76 @@ if "logged_in" not in st.session_state:
     st.session_state.role = ""
 
 # ---------------------------------------------------------
-# LOGIN PAGE
+# LOGIN & SIGN-UP PAGE
 # ---------------------------------------------------------
 if not st.session_state.logged_in:
-    st.title("🔒 GS Rurembo - System Login")
+    st.title("🔒 GS Rurembo - System Authentication")
     
     col1, col2, col3 = st.columns([1,2,1])
     with col2:
-        username = st.text_input("Username")
-        password = st.text_input("Password", type="password")
+        auth_tab = st.radio("Hitamo:", ["Injira (Login)", "Iyandikishe (Sign Up)"], horizontal=True)
         
-        if st.button("Login", use_container_width=True):
-            if username == "admin" and password == "123":
-                st.session_state.logged_in = True
-                st.session_state.username = "admin"
-                st.session_state.role = "Admin"
-                st.rerun()
-            elif username == "staff" and password == "123":
-                st.session_state.logged_in = True
-                st.session_state.username = "staff"
-                st.session_state.role = "Staff"
-                st.rerun()
-            else:
-                st.error("Username cyangwa Password sibyo!")
+        if auth_tab == "Injira (Login)":
+            username = st.text_input("Username")
+            password = st.text_input("Password", type="password")
+            
+            if st.button("Login", use_container_width=True):
+                # Check default admin/staff or database users
+                if username == "admin" and password == "123":
+                    st.session_state.logged_in = True
+                    st.session_state.username = "admin"
+                    st.session_state.role = "Admin"
+                    st.rerun()
+                elif username == "staff" and password == "123":
+                    st.session_state.logged_in = True
+                    st.session_state.username = "staff"
+                    st.session_state.role = "Staff"
+                    st.rerun()
+                else:
+                    # Check in Supabase users table
+                    df_users = fetch_data("users")
+                    if not df_users.empty and "username" in df_users.columns:
+                        user_row = df_users[df_users["username"] == username]
+                        if not user_row.empty:
+                            stored_hash = user_row.iloc[0]["password_hash"]
+                            if stored_hash == hash_password(password):
+                                st.session_state.logged_in = True
+                                st.session_state.username = username
+                                st.session_state.role = user_row.iloc[0]["role"]
+                                st.rerun()
+                    st.error("Username cyangwa Password sibyo!")
+                    
+        else: # Sign Up
+            st.subheader("Kora Konti Nshya")
+            new_user = st.text_input("Hitamo Username")
+            new_pass = st.text_input("Hitamo Password Ikomeye", type="password")
+            confirm_pass = st.text_input("Emeza Password", type="password")
+            role_choice = st.selectbox("Hitamo Urwego (Role)", ["Staff", "Admin"])
+            
+            st.info("💡 **Ibisabwa kuri Password:** Byibuze nyuguti 8, irimo nyuguti nkuru na nto, imibare, n'ibimenyetso.")
+            
+            if st.button("Iyandikishe (Register)", use_container_width=True):
+                if not new_user or not new_pass:
+                    st.error("Ugomba kuzuza amakuru yose!")
+                elif new_pass != confirm_pass:
+                    st.error("Password wavuze ntizihuye!")
+                else:
+                    check_msg = validate_password(new_pass)
+                    if check_msg != "OK":
+                        st.error(check_msg)
+                    else:
+                        # Check if user already exists
+                        df_users = fetch_data("users")
+                        if not df_users.empty and "username" in df_users.columns and new_user in df_users["username"].values:
+                            st.error("Uyu username isanzwe ikoreshwa, hitamo undi!")
+                        else:
+                            hashed = hash_password(new_pass)
+                            supabase.table("users").insert({
+                                "username": new_user,
+                                "password_hash": hashed,
+                                "role": role_choice
+                            }).execute()
+                            st.success("Konti yawe yaremwe neza! Ushobora kugaruka kuri 'Injira (Login)' ukagerageza kwinjira.")
     st.stop()
 
 # ---------------------------------------------------------
@@ -92,7 +156,6 @@ menu = st.sidebar.selectbox("Hitamo Igice (Menu)", [
 if menu == "📊 Dashboard & Stock":
     st.title("📊 Dashboard & Ububiko (Stock)")
     df_stock = fetch_data("stock")
-    
     if df_stock.empty:
         st.info("Nta bicuruzwa birajya muri Supabase stock database.")
     else:
@@ -104,7 +167,6 @@ if menu == "📊 Dashboard & Stock":
             category = st.text_input("Icyiciro (Category)")
             qty = st.number_input("Umubare w'intangiriro (Quantity)", min_value=0, value=0)
             unit = st.text_input("Igipimo (e.g. Kg, Pcs)")
-            
             if st.button("Save Item"):
                 if item_name:
                     supabase.table("stock").insert({"item_name": item_name, "category": category, "quantity": qty, "unit": unit}).execute()
@@ -118,7 +180,6 @@ elif menu == "📤 Direct Stock Out":
         selected_item = st.selectbox("Hitamo Igicuruzwa", df_stock["item_name"].tolist())
         qty_out = st.number_input("Umubare usohoka", min_value=1, value=1)
         received_by = st.text_input("Uwakiriye (Recipient)")
-        
         if st.button("Sohora"):
             current_row = df_stock[df_stock["item_name"] == selected_item].iloc[0]
             current_qty = current_row["quantity"]
@@ -180,16 +241,13 @@ elif menu == "📌 HR Dashboard":
     st.title("📊 GS Rurembo - HR & Staff Dashboard")
     df_emp = fetch_data("employees")
     df_leave = fetch_data("leaves")
-    
     col1, col2, col3 = st.columns(3)
     total_emp = len(df_emp) if not df_emp.empty else 0
     pending_leaves = len(df_leave[df_leave["status"] == "Pending"]) if not df_leave.empty and "status" in df_leave.columns else 0
     total_payroll = df_emp["basic_salary"].sum() if not df_emp.empty and "basic_salary" in df_emp.columns else 0
-    
     col1.metric("Bose Hamwe (Total Staff)", total_emp)
     col2.metric("Impushya Zitegerejwe (Pending)", pending_leaves)
     col3.metric("Igiteranyo cy'Imishahara", f"{total_payroll:,.0f} RWF")
-    
     st.markdown("---")
     st.subheader("📋 Abakozi Banditse")
     if not df_emp.empty:
@@ -212,22 +270,16 @@ elif menu == "👨‍💼 Abakozi n'Amasezerano":
                 basic_salary = st.number_input("Umushahara w'Ibanze (RWF)", min_value=0, value=100000, step=5000)
                 start_date = st.date_input("Itariki y'Itangiriro")
                 end_date = st.date_input("Itariki y'Iherezo (Niba ari CDD)")
-            
             if st.button("Bika Umukozi"):
                 if full_name:
                     supabase.table("employees").insert({
-                        "emp_id": emp_id,
-                        "full_name": full_name,
-                        "phone": phone,
-                        "position": position,
-                        "contract_type": contract_type,
-                        "basic_salary": basic_salary,
-                        "start_date": str(start_date),
+                        "emp_id": emp_id, "full_name": full_name, "phone": phone,
+                        "position": position, "contract_type": contract_type,
+                        "basic_salary": basic_salary, "start_date": str(start_date),
                         "end_date": str(end_date) if contract_type != "CDI (Permanent)" else "N/A"
                     }).execute()
                     st.success("Umukozi yanditswe neza!")
                     st.rerun()
-
     st.subheader("📄 Urutonde rw'Amasezerano")
     df_emp = fetch_data("employees")
     if not df_emp.empty:
@@ -238,7 +290,6 @@ elif menu == "👨‍💼 Abakozi n'Amasezerano":
 elif menu == "📝 Gusaba Impushya (Leaves)":
     st.title("📝 Icungamutungo w'Impushya (Leave Management)")
     df_emp = fetch_data("employees")
-    
     st.subheader("Saba Uruhushya")
     c1, c2 = st.columns(2)
     with c1:
@@ -248,23 +299,17 @@ elif menu == "📝 Gusaba Impushya (Leaves)":
         start_l = st.date_input("Kuva ku wa")
         end_l = st.date_input("Kugeza ku wa")
         reason = st.text_area("Impamvu")
-        
     if st.button("Ohereza Demande"):
         if applicant_name:
             days = (end_l - start_l).days + 1
             supabase.table("leaves").insert({
-                "emp_name": applicant_name,
-                "leave_type": leave_type,
-                "start_date": str(start_l),
-                "end_date": str(end_l),
-                "days": days if days > 0 else 1,
-                "reason": reason,
-                "status": "Pending",
-                "request_date": str(datetime.now().date())
+                "emp_name": applicant_name, "leave_type": leave_type,
+                "start_date": str(start_l), "end_date": str(end_l),
+                "days": days if days > 0 else 1, "reason": reason,
+                "status": "Pending", "request_date": str(datetime.now().date())
             }).execute()
             st.success("Demande yoherejwe!")
             st.rerun()
-
     st.markdown("---")
     st.subheader("📋 Ibisabwa n'Approvals")
     df_leave = fetch_data("leaves")
@@ -285,7 +330,6 @@ elif menu == "📝 Gusaba Impushya (Leaves)":
 elif menu == "💵 Imishahara (Payroll & Payslip)":
     st.title("💵 Icungamutungo w'Imishahara (Payroll)")
     df_emp = fetch_data("employees")
-    
     if df_emp.empty:
         st.warning("Banza wandike abakozi muri menu ya 'Abakozi n'Amasezerano'.")
     else:
@@ -299,24 +343,16 @@ elif menu == "💵 Imishahara (Payroll & Payslip)":
             tpr = calculate_tpr(taxable)
             total_ded = rssb + rama + tpr
             net = basic - total_ded
-            
             payroll_list.append({
-                "Amazina": row.get("full_name"),
-                "Position": row.get("position"),
-                "Basic Salary": basic,
-                "RSSB (3%)": rssb,
-                "RAMA/CBHI": rama,
-                "PAYE Tax": tpr,
-                "Total Deductions": total_ded,
-                "Net Salary": net
+                "Amazina": row.get("full_name"), "Position": row.get("position"),
+                "Basic Salary": basic, "RSSB (3%)": rssb, "RAMA/CBHI": rama,
+                "PAYE Tax": tpr, "Total Deductions": total_ded, "Net Salary": net
             })
-            
         df_payroll = pd.DataFrame(payroll_list)
         st.dataframe(df_payroll.style.format({
             "Basic Salary": "{:,.0f}", "RSSB (3%)": "{:,.0f}", "RAMA/CBHI": "{:,.0f}",
             "PAYE Tax": "{:,.0f}", "Total Deductions": "{:,.0f}", "Net Salary": "{:,.0f}"
         }), use_container_width=True)
-
         st.markdown("---")
         selected_staff = st.selectbox("Hitamo Umukozi wa Payslip", df_payroll["Amazina"].tolist())
         if st.button("Gana Payslip"):
