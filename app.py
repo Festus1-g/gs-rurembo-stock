@@ -96,7 +96,7 @@ if not st.session_state.logged_in:
                                 st.rerun()
                     st.error("Username cyangwa Password sibyo!")
                     
-        else: # Secure Sign Up using upsert
+        else: # Secure Sign Up
             st.subheader("Kora Konti Nshya (Staff Account)")
             new_user = st.text_input("Hitamo Username")
             new_pass = st.text_input("Hitamo Password Ikomeye", type="password")
@@ -115,13 +115,15 @@ if not st.session_state.logged_in:
                         st.error(check_msg)
                     else:
                         hashed = hash_password(new_pass)
-                        # Using upsert to prevent errors
-                        supabase.table("users").upsert({
-                            "username": new_user,
-                            "password_hash": hashed,
-                            "role": "Staff"
-                        }, on_conflict="username").execute()
-                        st.success("Konti yawe yaremwe nka Staff neza! Ushobora kugaruka kuri 'Injira (Login)' ukinjira.")
+                        try:
+                            supabase.table("users").insert({
+                                "username": new_user,
+                                "password_hash": hashed,
+                                "role": "Staff"
+                            }).execute()
+                            st.success("Konti yawe yaremwe nka Staff neza! Ushobora kugaruka kuri 'Injira (Login)' ukinjira.")
+                        except Exception as e:
+                            st.error(f"Uyu username ashobora kuba asanzwe abaho cyangwa habaye ikibazo: {e}")
     st.stop()
 
 # ---------------------------------------------------------
@@ -371,7 +373,7 @@ elif menu == "💵 Imishahara (Payroll & Payslip)":
             """)
 
 # =========================================================
-# PART 3: CHANGE PASSWORD FEATURE (Using Upsert)
+# PART 3: CHANGE PASSWORD FEATURE (Safely checking existence)
 # =========================================================
 elif menu == "🔐 Hindura Password":
     st.title("🔐 Guhindura Password ya Konti yawe")
@@ -392,7 +394,6 @@ elif menu == "🔐 Hindura Password":
             if check_msg != "OK":
                 st.error(check_msg)
             else:
-                # Validate current password
                 is_valid_old = False
                 if st.session_state.username in ["admin", "staff"]:
                     if current_pass == "123":
@@ -411,13 +412,27 @@ elif menu == "🔐 Hindura Password":
                 
                 if is_valid_old:
                     new_hash = hash_password(new_pass)
-                    # Use upsert to safely update or insert user password without crashing
-                    supabase.table("users").upsert({
-                        "username": st.session_state.username,
-                        "password_hash": new_hash,
-                        "role": st.session_state.role
-                    }, on_conflict="username").execute()
-                    st.success("Password yawe yahinduwe neza cyane!")
+                    try:
+                        df_users = fetch_data("users")
+                        user_exists = False
+                        if not df_users.empty and "username" in df_users.columns:
+                            if st.session_state.username in df_users["username"].values:
+                                user_exists = True
+                        
+                        if user_exists:
+                            supabase.table("users").update({
+                                "password_hash": new_hash
+                            }).eq("username", st.session_state.username).execute()
+                        else:
+                            supabase.table("users").insert({
+                                "username": st.session_state.username,
+                                "password_hash": new_hash,
+                                "role": st.session_state.role
+                            }).execute()
+                            
+                        st.success("Password yawe yahinduwe neza cyane!")
+                    except Exception as e:
+                        st.error(f"Byanze guhindura password: {e}")
 
 # =========================================================
 # PART 4: ADMIN USER MANAGEMENT
