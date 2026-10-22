@@ -267,17 +267,36 @@ elif menu == "👨‍💼 Abakozi n'Amasezerano":
                 contract_type = st.selectbox("Ubwoko bw'Amasezerano", ["CDI (Permanent)", "CDD (Contract)", "Part-time"])
                 basic_salary = st.number_input("Umushahara w'Ibanze (RWF)", min_value=0, value=100000, step=5000)
                 start_date = st.date_input("Itariki y'Itangiriro")
-                end_date = st.date_input("Itariki y'Iherezo (Niba ari CDD)")
+            end_date = st.date_input("Itariki y'Iherezo (Niba ari CDD)")
+
             if st.button("Bika Umukozi"):
                 if full_name:
-                    supabase.table("employees").insert({
-                        "emp_id": emp_id, "full_name": full_name, "phone": phone,
-                        "position": position, "contract_type": contract_type,
-                        "basic_salary": basic_salary, "start_date": str(start_date),
-                        "end_date": str(end_date) if contract_type != "CDI (Permanent)" else "N/A"
-                    }).execute()
-                    st.success("Umukozi yanditswe neza!")
-                    st.rerun()
+                    try:
+                        # Tegura dates mu buryo buhuye na Supabase Date column
+                        start_date_val = start_date.isoformat() if start_date else None
+                        
+                        # Niba ari CDI, end_date iba None (NULL muri Database) aho kuba "N/A"
+                        end_date_val = end_date.isoformat() if contract_type != "CDI (Permanent)" and end_date else None
+
+                        supabase.table("employees").insert({
+                            "emp_id": emp_id,
+                            "full_name": full_name,
+                            "phone": phone,
+                            "position": position,
+                            "contract_type": contract_type,
+                            "basic_salary": basic_salary,
+                            "start_date": start_date_val,
+                            "end_date": end_date_val
+                        }).execute()
+                        
+                        st.success("Umukozi yanditswe neza!")
+                        st.rerun()
+                        
+                    except Exception as e:
+                        st.error(f"Harimo ikosa mu kubika: {e}")
+                else:
+                    st.warning("Nyamuneka uzuza izina ry'umukozi!")
+
     st.subheader("📄 Urutonde rw'Amasezerano")
     df_emp = fetch_data("employees")
     if not df_emp.empty:
