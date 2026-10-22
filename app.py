@@ -57,7 +57,7 @@ def init_db():
         )
     ''')
     
-    # Table ya Payroll (Imishahara & RSSB / CBHI)
+    # Kurema table ya payroll upfunduriye kuri columns nshya zose
     c.execute('''
         CREATE TABLE IF NOT EXISTS payroll (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -75,6 +75,28 @@ def init_db():
         )
     ''')
     
+    # Niba table ya payroll cyangwa stock_requests zari zisanzwe zifite ikibazo cya columns, tuzivugurura hano
+    try:
+        c.execute("ALTER TABLE payroll ADD COLUMN pension REAL")
+    except:
+        pass
+    try:
+        c.execute("ALTER TABLE payroll ADD COLUMN cbhi REAL")
+    except:
+        pass
+    try:
+        c.execute("ALTER TABLE payroll ADD COLUMN maternity REAL")
+    except:
+        pass
+    try:
+        c.execute("ALTER TABLE payroll ADD COLUMN other_loans REAL")
+    except:
+        pass
+    try:
+        c.execute("ALTER TABLE payroll ADD COLUMN total_deductions REAL")
+    except:
+        pass
+
     conn.commit()
     conn.close()
 
@@ -166,7 +188,6 @@ elif menu == "Gucunga Stock / Ububiko":
         "✅ Kwapprova Ibyasabwe (Approvals)"
     ])
     
-    # TAB 1: STOCK BALANCE
     with tab_s1:
         st.subheader("📋 Urutonde rw'Ibicuruzwa na Quantity iri muri Ububiko")
         conn = sqlite3.connect(DB_FILE)
@@ -180,25 +201,23 @@ elif menu == "Gucunga Stock / Ububiko":
             csv_stock = df_stock.to_csv(index=False).encode('utf-8')
             st.download_button("📥 Kurura Stock Balance (CSV)", data=csv_stock, file_name="Stock_GS_Rurembo.csv", mime="text/csv")
 
-    # TAB 2: KWINGIZA ITEM (STOCK IN)
     with tab_s2:
         st.subheader("📥 Ongeraho Igicuruzwa cyangwa Ingano Muri Stock")
         col1, col2 = st.columns(2)
         
         with col1:
             item_name = st.text_input("Izina ry'Igicuruzwa *")
-            category = st.text_input("Icyiciro (Category / Urugero: Isukari, Ibipapuro, Isabune...)")
+            category = st.text_input("Icyiciro (Category / Urugero: Isukari, Ibipapuro...)")
             
         with col2:
             qty = st.number_input("Ingano Uyongereye (Quantity)", min_value=1, step=1)
-            unit = st.text_input("Igipimo (e.g. Kg, Pcs, Liters, Cartons)")
+            unit = st.text_input("Igipimo (e.g. Kg, Pcs, Liters)")
             
         if st.button("💾 Bika / Ongeraho Muri Stock"):
             if item_name:
                 try:
                     conn = sqlite3.connect(DB_FILE)
                     c = conn.cursor()
-                    
                     c.execute("SELECT quantity FROM stock WHERE item_name = ?", (item_name,))
                     existing = c.fetchone()
                     
@@ -218,7 +237,6 @@ elif menu == "Gucunga Stock / Ububiko":
             else:
                 st.warning("Uzuza izina ry'igicuruzwa!")
 
-    # TAB 3: GUSABA ITEM
     with tab_s3:
         st.subheader("📝 Fomu yo Gusaba Igicuruzwa muri Stock")
         conn = sqlite3.connect(DB_FILE)
@@ -254,12 +272,11 @@ elif menu == "Gucunga Stock / Ububiko":
                         ''', (requester_name, selected_item, int(req_qty), reason, today))
                         conn.commit()
                         conn.close()
-                        st.success("Ubusabe bwawe bworejwe neza! Mutegereze approval.")
+                        st.success("Ubusabe bwawe bwoherejwe neza! Mutegereze approval.")
                         st.rerun()
                 else:
                     st.warning("Uzuza izina ry'usaba n'igicuruzwa!")
 
-    # TAB 4: KWAPPROVA IBYASABWE (APPROVALS)
     with tab_s4:
         st.subheader("✅ Approve cyangwa Reject Ubusabe bw'Ibyasabwe")
         conn = sqlite3.connect(DB_FILE)
@@ -341,7 +358,6 @@ elif menu == "Abakozi n'Amasezerano":
                 try:
                     conn = sqlite3.connect(DB_FILE)
                     c = conn.cursor()
-                    
                     start_str = start_date.strftime("%Y-%m-%d") if start_date else None
                     end_str = end_date.strftime("%Y-%m-%d") if contract_type != "CDI (Permanent)" and end_date else "N/A"
                     
@@ -360,7 +376,7 @@ elif menu == "Abakozi n'Amasezerano":
                 st.warning("Uzuza nibura Izina ry'umukozi!")
 
 # ---------------------------------------------------------
-# 6. PAYROLL / IMISHAHARA (PENSION 6%, CBHI 0.5%, MATERNITY 0.3%)
+# 6. PAYROLL / IMISHAHARA
 # ---------------------------------------------------------
 elif menu == "Payroll / Imishahara":
     st.title("💰 Icungamutungo ry'Imishahara (Payroll)")
@@ -416,7 +432,6 @@ elif menu == "Payroll / Imishahara":
                 other_loans = st.number_input("Ibindi bikatwa (Loans / Advance Frw)", min_value=0.0, step=500.0)
                 payment_date = st.date_input("Itariki yo Kwishyura")
                 
-                # Igiteranyo cy'Ibyakatwe cyose & Net Salary
                 total_deductions = pension_deduction + cbhi_deduction + maternity_deduction + other_loans
                 net_salary = (basic_salary + allowances) - total_deductions
                 
@@ -434,7 +449,7 @@ elif menu == "Payroll / Imishahara":
                         ''', (month_year, selected_emp, basic_salary, allowances, pension_deduction, cbhi_deduction, maternity_deduction, other_loans, total_deductions, net_salary, payment_date.strftime("%Y-%m-%d")))
                         conn.commit()
                         conn.close()
-                        st.success(f"Umushahara wa **{selected_emp}** w'ukwezi kwa **{month_year}** hamwe na CBHI (0.5%) ubarwe neza!")
+                        st.success(f"Umushahara wa **{selected_emp}** w'ukwezi kwa **{month_year}** ubikiwe neza!")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Harimo ikosa: {e}")
