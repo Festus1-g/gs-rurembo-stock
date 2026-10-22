@@ -41,12 +41,25 @@ def init_db():
             unit TEXT
         )
     ''')
+    # Table ya payroll / imishahara
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS payroll (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            month_year TEXT,
+            full_name TEXT,
+            basic_salary REAL,
+            allowances REAL,
+            deductions REAL,
+            net_salary REAL,
+            payment_date TEXT
+        )
+    ''')
     conn.commit()
     conn.close()
 
 init_db()
 
-# Custom CSS yo kugarura amabara n'ishusho nziza
+# Custom CSS yo kunonosora ishusho
 st.markdown("""
     <style>
     .main-header { font-size: 26px; font-weight: bold; color: #1E88E5; }
@@ -72,13 +85,14 @@ with st.sidebar:
         [
             "Dashboard",
             "Abakozi n'Amasezerano", 
+            "Payroll / Imishahara",
             "Stock / Ububiko", 
             "Raporo"
         ]
     )
 
 # ---------------------------------------------------------
-# 3. PAGE 1: DASHBOARD (Nk'iy'ambere yagutse)
+# 3. PAGE 1: DASHBOARD
 # ---------------------------------------------------------
 if menu == "Dashboard":
     st.title("🏫 GS Rurembo - Dashboard nshingiro")
@@ -88,6 +102,7 @@ if menu == "Dashboard":
     conn = sqlite3.connect(DB_FILE)
     df_emp = pd.read_sql_query("SELECT * FROM employees", conn)
     df_stock = pd.read_sql_query("SELECT * FROM stock", conn)
+    df_pay = pd.read_sql_query("SELECT * FROM payroll", conn)
     conn.close()
 
     # Metrics za Dashboard
@@ -107,14 +122,14 @@ if menu == "Dashboard":
     col_left, col_right = st.columns(2)
     
     with col_left:
-        st.subheader("📋 Inshamake y'Abakozi ba Hafi")
+        st.subheader("📋 Abakozi ba Hafi Banditse")
         if not df_emp.empty:
-            st.dataframe(df_emp[['full_name', 'position', 'contract_type']].tail(5), use_container_width=True)
+            st.dataframe(df_emp[['full_name', 'position', 'basic_salary']].tail(5), use_container_width=True)
         else:
             st.info("Nta mukozi urabandikwa muri sisitemu.")
             
     with col_right:
-        st.subheader("📦 Inshamake y'Ibicuruzwa muri Stock")
+        st.subheader("📦 Ibicuruzwa bya Nyuma muri Stock")
         if not df_stock.empty:
             st.dataframe(df_stock[['item_name', 'category', 'quantity', 'unit']].tail(5), use_container_width=True)
         else:
@@ -162,7 +177,7 @@ elif menu == "Abakozi n'Amasezerano":
             
         with col2:
             contract_type = st.selectbox("Ibwoko bw'Amasezerano", ["CDI (Permanent)", "CDD (Amasezerano y'Igihe)"])
-            basic_salary = st.number_input("Umushahara (Basic Salary Frw)", min_value=0, step=1000)
+            basic_salary = st.number_input("Umushahara w'Ibanze (Basic Salary Frw)", min_value=0.0, step=1000.0)
             start_date = st.date_input("Itariki y'Itangiriro")
             end_date = st.date_input("Itariki y'Iherezo (Niba ari CDD)")
 
@@ -191,7 +206,84 @@ elif menu == "Abakozi n'Amasezerano":
                 st.warning("Nyamuneka uzuza nibura Izina ry'umukozi!")
 
 # ---------------------------------------------------------
-# 5. PAGE 3: STOCK / UBUBIKO (Buhuye neza na Dashboard)
+# 5. PAGE 3: PAYROLL / IMISHAHARA
+# ---------------------------------------------------------
+elif menu == "Payroll / Imishahara":
+    st.title("💰 Icungamutungo ry'Imishahara (Payroll)")
+    st.write("Aha ushobora gutegura imishahara y'abakozi, ibihumbi n'inyongera buri kwezi.")
+    st.markdown("---")
+    
+    tab_p1, tab_p2 = st.tabs(["📋 Urutonde rw'Imishahara Zatanzwe", "➕ Tunganya Umushahara Mushya"])
+    
+    with tab_p1:
+        st.subheader("Imishahara yanditswe muri Sisitemu")
+        conn = sqlite3.connect(DB_FILE)
+        df_pay = pd.read_sql_query("SELECT * FROM payroll", conn)
+        conn.close()
+        
+        if df_pay.empty:
+            st.info("Nta mishahara irandikwa cyangwa ngo itangwe.")
+        else:
+            st.dataframe(df_pay, use_container_width=True)
+            csv_pay = df_pay.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📥 Kurura Raporo y'Imishahara (CSV)",
+                data=csv_pay,
+                file_name="Imishahara_GS_Rurembo.csv",
+                mime="text/csv"
+            )
+            
+    with tab_p2:
+        st.subheader("Gutunganya no Kubika Umushahara w'Umukozi")
+        
+        conn = sqlite3.connect(DB_FILE)
+        df_emp = pd.read_sql_query("SELECT * FROM employees", conn)
+        conn.close()
+        
+        if df_emp.empty:
+            st.warning("Banza wandike abakozi muri 'Abakozi n'Amasezerano' kugira ngo ubone uko ubahemba.")
+        else:
+            selected_emp = st.selectbox("Hitamo Umukozi", df_emp['full_name'].tolist())
+            emp_row = df_emp[df_emp['full_name'] == selected_emp].iloc[0]
+            
+            default_salary = float(emp_row['basic_salary']) if 'basic_salary' in emp_row else 0.0
+            
+            c1, c2 = st.columns(2)
+            with c1:
+                month_year = st.text_input("Ukwezi n'Umwaka (Urugero: October 2026)")
+                basic_salary = st.number_input("Umushahara w'Ibanze (Frw)", value=default_salary, step=1000.0)
+                allowances = st.number_input("Inyongera / Agahimbazamusyi (Allowances Frw)", min_value=0.0, step=500.0)
+                
+            with c2:
+                deductions = st.number_input("Ikatwa / Ibindi (Deductions Frw)", min_value=0.0, step=500.0)
+                payment_date = st.date_input("Itariki yo Gutangira / Kwishyura")
+                
+                # Net salary calculation
+                net_salary = (basic_salary + allowances) - deductions
+                st.info(f"**Umushahara w'Umusaruro (Net Salary):** {net_salary:,.2f} Frw")
+                
+            if st.button("💾 Bika Umushahara"):
+                if month_year:
+                    try:
+                        conn = sqlite3.connect(DB_FILE)
+                        c = conn.cursor()
+                        c.execute('''
+                            INSERT INTO payroll (month_year, full_name, basic_salary, allowances, deductions, net_salary, payment_date)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                        ''', (month_year, selected_emp, basic_salary, allowances, deductions, net_salary, payment_date.strftime("%Y-%m-%d")))
+                        
+                        conn.commit()
+                        conn.close()
+                        
+                        st.success(f"Umushahara wa **{selected_emp}** w'ukwezi kwa **{month_year}** ubikiwe neza!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Harimo ikosa mu kubika umushahara: {e}")
+                else:
+                    st.warning("Nyamuneka andika ukwezi n'umwaka (Urugero: October 2026)!")
+
+# ---------------------------------------------------------
+# 6. PAGE 4: STOCK / UBUBIKO
 # ---------------------------------------------------------
 elif menu == "Stock / Ububiko":
     st.title("📦 Gucunga Stock / Ububiko")
@@ -251,8 +343,8 @@ elif menu == "Stock / Ububiko":
                 st.warning("Nyamuneka uzuza izina ry'igicuruzwa!")
 
 # ---------------------------------------------------------
-# 6. PAGE 4: RAPORO
+# 7. PAGE 5: RAPORO
 # ---------------------------------------------------------
 elif menu == "Raporo":
-    st.title("📊 Raporo n'Imbonerahamwe")
-    st.info("Aha haba hari raporo n'imbonerahamwe z'ibintu byose muri GS Rurembo.")
+    st.title("📊 Raporo n'Imbonerahamwe rusange")
+    st.info("Aha haba hari raporo zose z'ibigo n'imbonerahamwe za GS Rurembo.")
