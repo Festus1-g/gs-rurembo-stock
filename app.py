@@ -273,22 +273,21 @@ elif menu == "👨‍💼 Abakozi n'Amasezerano":
                 start_date = st.date_input("Itariki y'Itangiriro")
                 end_date = st.date_input("Itariki y'Iherezo (Niba ari CDD)")
             if st.button("Bika Umukozi"):
-                if full_name:
+            if full_name:
+                try:
                     supabase.table("employees").insert({
-                "emp_id": emp_id,
-                "full_name": full_name,
-                "phone": phone,
-                "position": position,
-                "contract_type": contract_type,
-                "basic_salary": basic_salary,
-                "start_date": str(start_date),
-                "end_date": str(end_date) if contract_type != "CDI (Permanent)" else None
-            }).execute()
-            st.success("Umukozi abitswe neza!")
-    response = supabase.table("izina_ry_itable").select("*").execute()
-except Exception as e:
-    st.error(f"Harabaye ikosa mu gufata amakuru muri Supabase: {e}")
-                    st.success("Umukozi yanditswe neza!")
+                        "emp_id": emp_id,
+                        "full_name": full_name,
+                        "phone": phone,
+                        "position": position,
+                        "contract_type": contract_type,
+                        "basic_salary": basic_salary,
+                        "start_date": str(start_date),
+                        "end_date": str(end_date) if contract_type != "CDI (Permanent)" else None
+                    }).execute()
+                    st.success("Umukozi abitswe neza!")
+                except Exception as e:
+                    st.error(f"Habaye ikosa mu kubika umukozi: {e}")
                     st.rerun()
     st.subheader("📄 Urutonde rw'Amasezerano")
     df_emp = fetch_data("employees")
