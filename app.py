@@ -1,10 +1,10 @@
 import streamlit as st
 import pandas as pd
 import sqlite3
-import os
+import datetime
 
 # ---------------------------------------------------------
-# 1. SETUP DATABASE (SQLite Local Database)
+# 1. SETUP PAGE CONFIG & DATABASE (SQLite Local)
 # ---------------------------------------------------------
 st.set_page_config(
     page_title="GS Rurembo Management System",
@@ -17,7 +17,6 @@ DB_FILE = "gs_rurembo.db"
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    
     # Table y'abakozi
     c.execute('''
         CREATE TABLE IF NOT EXISTS employees (
@@ -32,8 +31,7 @@ def init_db():
             end_date TEXT
         )
     ''')
-    
-    # Table ya Stock
+    # Table ya stock
     c.execute('''
         CREATE TABLE IF NOT EXISTS stock (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,11 +41,18 @@ def init_db():
             unit TEXT
         )
     ''')
-    
     conn.commit()
     conn.close()
 
 init_db()
+
+# Custom CSS yo kugarura amabara n'ishusho nziza
+st.markdown("""
+    <style>
+    .main-header { font-size: 26px; font-weight: bold; color: #1E88E5; }
+    .stMetric { background-color: #f0f2f6; padding: 10px; border-radius: 10px; }
+    </style>
+""", unsafe_allow_html=True)
 
 # ---------------------------------------------------------
 # 2. SIDEBAR NAVIGATION
@@ -65,17 +70,60 @@ with st.sidebar:
     menu = st.selectbox(
         "Hitamo Igice:",
         [
+            "Dashboard",
             "Abakozi n'Amasezerano", 
-            "Dashboard", 
             "Stock / Ububiko", 
             "Raporo"
         ]
     )
 
 # ---------------------------------------------------------
-# 3. ABAKOZI N'AMASEZERANO
+# 3. PAGE 1: DASHBOARD (Nk'iy'ambere yagutse)
 # ---------------------------------------------------------
-if menu == "Abakozi n'Amasezerano":
+if menu == "Dashboard":
+    st.title("🏫 GS Rurembo - Dashboard nshingiro")
+    st.write("Aha ni ku nshamake no ku mbonerahamwe y'ibikorwa byose muri Sisitemu.")
+    st.markdown("---")
+    
+    conn = sqlite3.connect(DB_FILE)
+    df_emp = pd.read_sql_query("SELECT * FROM employees", conn)
+    df_stock = pd.read_sql_query("SELECT * FROM stock", conn)
+    conn.close()
+
+    # Metrics za Dashboard
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        st.metric(label="👥 Abakozi Bose", value=len(df_emp))
+    with c2:
+        cdi_count = len(df_emp[df_emp['contract_type'] == "CDI (Permanent)"]) if not df_emp.empty else 0
+        st.metric(label="📜 Abafite CDI", value=cdi_count)
+    with c3:
+        st.metric(label="📦 Ubwoko bwa Stock", value=len(df_stock))
+    with c4:
+        total_qty = df_stock['quantity'].sum() if not df_stock.empty and 'quantity' in df_stock.columns else 0
+        st.metric(label="📊 Ingano y'Ibintu muri Stock", value=int(total_qty))
+
+    st.markdown("---")
+    col_left, col_right = st.columns(2)
+    
+    with col_left:
+        st.subheader("📋 Inshamake y'Abakozi ba Hafi")
+        if not df_emp.empty:
+            st.dataframe(df_emp[['full_name', 'position', 'contract_type']].tail(5), use_container_width=True)
+        else:
+            st.info("Nta mukozi urabandikwa muri sisitemu.")
+            
+    with col_right:
+        st.subheader("📦 Inshamake y'Ibicuruzwa muri Stock")
+        if not df_stock.empty:
+            st.dataframe(df_stock[['item_name', 'category', 'quantity', 'unit']].tail(5), use_container_width=True)
+        else:
+            st.info("Nta gicuruzwa kiragera muri stock.")
+
+# ---------------------------------------------------------
+# 4. PAGE 2: ABAKOZI N'AMASEZERANO
+# ---------------------------------------------------------
+elif menu == "Abakozi n'Amasezerano":
     st.title("👨‍💼 Icungamutungo ry'Abakozi n'Amasezerano")
     st.write("Aha ushobora kwandika umukozi mushya no kureba urutonde rw'abakozi basanzwe muri GS Rurembo.")
     st.markdown("---")
@@ -143,23 +191,7 @@ if menu == "Abakozi n'Amasezerano":
                 st.warning("Nyamuneka uzuza nibura Izina ry'umukozi!")
 
 # ---------------------------------------------------------
-# 4. DASHBOARD
-# ---------------------------------------------------------
-elif menu == "Dashboard":
-    st.title("🏫 GS Rurembo - Dashboard")
-    conn = sqlite3.connect(DB_FILE)
-    df_emp = pd.read_sql_query("SELECT * FROM employees", conn)
-    df_stock = pd.read_sql_query("SELECT * FROM stock", conn)
-    conn.close()
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric(label="Bose Hamwe Abakozi Banditse", value=len(df_emp))
-    with col2:
-        st.metric(label="Ibicuruzwa Biri muri Stock", value=len(df_stock))
-
-# ---------------------------------------------------------
-# 5. STOCK / UBUBIKO
+# 5. PAGE 3: STOCK / UBUBIKO (Buhuye neza na Dashboard)
 # ---------------------------------------------------------
 elif menu == "Stock / Ububiko":
     st.title("📦 Gucunga Stock / Ububiko")
@@ -177,6 +209,14 @@ elif menu == "Stock / Ububiko":
             st.info("Nta gicuruzwa kiragera muri stock.")
         else:
             st.dataframe(df_stock, use_container_width=True)
+            
+            csv_stock = df_stock.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📥 Kurura Urutonde lwa Stock (Download CSV)",
+                data=csv_stock,
+                file_name="Stock_GS_Rurembo.csv",
+                mime="text/csv"
+            )
             
     with tab_s2:
         st.subheader("Form yo Gushyira Igicuruzwa muri Stock")
@@ -211,7 +251,7 @@ elif menu == "Stock / Ububiko":
                 st.warning("Nyamuneka uzuza izina ry'igicuruzwa!")
 
 # ---------------------------------------------------------
-# 6. RAPORO
+# 6. PAGE 4: RAPORO
 # ---------------------------------------------------------
 elif menu == "Raporo":
     st.title("📊 Raporo n'Imbonerahamwe")
