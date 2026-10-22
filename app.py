@@ -41,7 +41,7 @@ def validate_password(password):
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
-# Helper function for Rwandan PAYE Tax
+# Helper function for Rwandan PAYE / TPR Tax
 def calculate_tpr(taxable_income):
     if taxable_income <= 60000:
         return 0
@@ -143,6 +143,7 @@ menu_list = [
     "👨‍💼 Abakozi n'Amasezerano", 
     "📝 Gusaba Impushya (Leaves)", 
     "💵 Imishahara (Payroll & Payslip)",
+    "📈 Raporo Zose (Reports)",
     "🔐 Hindura Password"
 ]
 
@@ -236,7 +237,7 @@ elif menu == "📖 Fiche de Stock Card":
         st.info("Nta miyoborere cyangwa transactions zirakorwa.")
 
 # =========================================================
-# PART 2: HR & PAYROLL SYSTEM
+# PART 2: HR & PAYROLL SYSTEM (RSSB 6% + 6% = 12%)
 # =========================================================
 elif menu == "📌 HR Dashboard":
     st.title("📊 GS Rurembo - HR & Staff Dashboard")
@@ -338,22 +339,39 @@ elif menu == "💵 Imishahara (Payroll & Payslip)":
         payroll_list = []
         for index, row in df_emp.iterrows():
             basic = float(row.get("basic_salary", 0))
-            rssb = basic * 0.03
+            
+            # RSSB: 6% Umukozi + 6% Umukoresha (Total 12%)
+            rssb_employee = basic * 0.06
+            rssb_employer = basic * 0.06
+            total_rssb = rssb_employee + rssb_employer
+            
             rama = basic * 0.005
-            taxable = basic - rssb
+            taxable = basic - rssb_employee
             tpr = calculate_tpr(taxable)
-            total_ded = rssb + rama + tpr
+            
+            total_ded = rssb_employee + rama + tpr
             net = basic - total_ded
+            
             payroll_list.append({
-                "Amazina": row.get("full_name"), "Position": row.get("position"),
-                "Basic Salary": basic, "RSSB (3%)": rssb, "RAMA/CBHI": rama,
-                "PAYE Tax": tpr, "Total Deductions": total_ded, "Net Salary": net
+                "Amazina": row.get("full_name"), 
+                "Position": row.get("position"),
+                "Basic Salary": basic, 
+                "RSSB Mukozi (6%)": rssb_employee,
+                "RSSB Mukoresha (6%)": rssb_employer,
+                "RSSB Total (12%)": total_rssb,
+                "RAMA/CBHI (0.5%)": rama,
+                "PAYE Tax": tpr, 
+                "Total Deductions": total_ded, 
+                "Net Salary": net
             })
         df_payroll = pd.DataFrame(payroll_list)
         st.dataframe(df_payroll.style.format({
-            "Basic Salary": "{:,.0f}", "RSSB (3%)": "{:,.0f}", "RAMA/CBHI": "{:,.0f}",
-            "PAYE Tax": "{:,.0f}", "Total Deductions": "{:,.0f}", "Net Salary": "{:,.0f}"
+            "Basic Salary": "{:,.0f}", "RSSB Mukozi (6%)": "{:,.0f}", 
+            "RSSB Mukoresha (6%)": "{:,.0f}", "RSSB Total (12%)": "{:,.0f}",
+            "RAMA/CBHI (0.5%)": "{:,.0f}", "PAYE Tax": "{:,.0f}", 
+            "Total Deductions": "{:,.0f}", "Net Salary": "{:,.0f}"
         }), use_container_width=True)
+        
         st.markdown("---")
         selected_staff = st.selectbox("Hitamo Umukozi wa Payslip", df_payroll["Amazina"].tolist())
         if st.button("Gana Payslip"):
@@ -365,15 +383,82 @@ elif menu == "💵 Imishahara (Payroll & Payslip)":
             * **Umwanya:** {staff_row['Position']}
             ---
             * **Basic Salary:** {staff_row['Basic Salary']:,.0f} RWF
-            * **RSSB (3%):** -{staff_row['RSSB (3%)']:,.0f} RWF
-            * **RAMA/CBHI:** -{staff_row['RAMA/CBHI']:,.0f} RWF
-            * **PAYE Tax:** -{staff_row['PAYE Tax']:,.0f} RWF
+            * **RSSB Pension (6% Mukozi):** -{staff_row['RSSB Mukozi (6%)']:,.0f} RWF
+            * **RAMA/CBHI (0.5%):** -{staff_row['RAMA/CBHI (0.5%)']:,.0f} RWF
+            * **PAYE Tax (TPR):** -{staff_row['PAYE Tax']:,.0f} RWF
             ---
             ### **NET SALARY:** {staff_row['Net Salary']:,.0f} RWF
             """)
 
 # =========================================================
-# PART 3: CHANGE PASSWORD FEATURE (Safe & Error-Free)
+# PART 3: REPORTS & ANALYTICS
+# =========================================================
+elif menu == "📈 Raporo Zose (Reports)":
+    st.title("📈 GS Rurembo - Raporo Zose n'Ibipimo (Reports)")
+    
+    report_tab = st.tabs(["📊 Raporo y'Ububiko (Stock)", "👨‍💼 Raporo y'Abakozi (HR)", "💵 Raporo y'Imishahara & RSSB (12%)"])
+    
+    with report_tab[0]:
+        st.subheader("📊 Raporo y'Ububiko & Stock Card")
+        df_stock = fetch_data("stock")
+        df_trans = fetch_data("transactions")
+        
+        c1, c2 = st.columns(2)
+        c1.metric("Bicuruzwa / Bipimo biri mu Stock", len(df_stock) if not df_stock.empty else 0)
+        c2.metric("Umubare w'Izisohoka/Izinjira (Transactions)", len(df_trans) if not df_trans.empty else 0)
+        
+        st.markdown("#### 📋 Stock Balances Current")
+        if not df_stock.empty:
+            st.dataframe(df_stock, use_container_width=True)
+            
+    with report_tab[1]:
+        st.subheader("👨‍💼 Raporo y'Abakozi & Impushya")
+        df_emp = fetch_data("employees")
+        df_leave = fetch_data("leaves")
+        if not df_emp.empty:
+            st.dataframe(df_emp, use_container_width=True)
+            
+    with report_tab[2]:
+        st.subheader("💵 Raporo y'Imishahara, RSSB (6%+6%=12%) & PAYE Tax")
+        df_emp = fetch_data("employees")
+        if not df_emp.empty:
+            payroll_report = []
+            for index, row in df_emp.iterrows():
+                basic = float(row.get("basic_salary", 0))
+                rssb_employee = basic * 0.06
+                rssb_employer = basic * 0.06
+                total_rssb = rssb_employee + rssb_employer
+                rama = basic * 0.005
+                taxable = basic - rssb_employee
+                tpr = calculate_tpr(taxable)
+                net = basic - (rssb_employee + rama + tpr)
+                
+                payroll_report.append({
+                    "Umukozi": row.get("full_name"),
+                    "Basic Salary": basic,
+                    "RSSB Employee (6%)": rssb_employee,
+                    "RSSB Employer (6%)": rssb_employer,
+                    "Total RSSB (12%)": total_rssb,
+                    "RAMA/CBHI": rama,
+                    "PAYE Tax": tpr,
+                    "Net Salary": net
+                })
+            
+            df_rep = pd.DataFrame(payroll_report)
+            st.dataframe(df_rep.style.format({
+                "Basic Salary": "{:,.0f}", "RSSB Employee (6%)": "{:,.0f}", 
+                "RSSB Employer (6%)": "{:,.0f}", "Total RSSB (12%)": "{:,.0f}",
+                "RAMA/CBHI": "{:,.0f}", "PAYE Tax": "{:,.0f}", "Net Salary": "{:,.0f}"
+            }), use_container_width=True)
+            
+            # Totals summary
+            st.markdown("### 📊 Inshamake y'Umusoro n'Imisanzu Yose Hamwe")
+            st.write(f"• **Igiteranyo cya RSSB yose gomba kwishyurwa (12%):** {df_rep['Total RSSB (12%)'].sum():,.0f} RWF")
+            st.write(f"• **Igiteranyo cy'Umusoro wa PAYE/TPR:** {df_rep['PAYE Tax'].sum():,.0f} RWF")
+            st.write(f"• **Igiteranyo cy'Umushahara Mbonera (Net Salary Total):** {df_rep['Net Salary'].sum():,.0f} RWF")
+
+# =========================================================
+# PART 4: CHANGE PASSWORD FEATURE
 # =========================================================
 elif menu == "🔐 Hindura Password":
     st.title("🔐 Guhindura Password ya Konti yawe")
@@ -411,19 +496,14 @@ elif menu == "🔐 Hindura Password":
                             st.error("Password ya kera wanditse si yo!")
                 
                 if is_valid_old:
-                    # Successfully validated old password and rules without DB crash error
                     st.success("Password yawe yahinduwe neza cyane!")
 
 # =========================================================
-# PART 4: ADMIN USER MANAGEMENT
-# =========================================================
-# =========================================================
-# PART 4: ADMIN USER MANAGEMENT
+# PART 5: ADMIN USER MANAGEMENT
 # =========================================================
 elif menu == "👥 Gucunga Abakoresha (Users)" and st.session_state.role == "Admin":
     st.title("👥 Gucunga Abakoresha na Roles (User Management)")
     
-    # ➕ Form yo kwandika umukoresha gishya binyuze kuri Admin
     with st.expander("➕ Ongeza Umukoresha Gishya (Add User)"):
         add_user = st.text_input("Username Nshya")
         add_pass = st.text_input("Password", type="password")
@@ -451,7 +531,6 @@ elif menu == "👥 Gucunga Abakoresha (Users)" and st.session_state.role == "Adm
 
     st.markdown("---")
     
-    # Urutonde rw'abakoresha
     df_users = fetch_data("users")
     if not df_users.empty:
         st.subheader("📋 Urutonde rw'Abakoresha ba System")
