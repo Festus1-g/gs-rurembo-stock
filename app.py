@@ -385,4 +385,129 @@ elif menu == "Abakozi n'Amasezerano":
         col1, col2 = st.columns(2)
         with col1:
             emp_id = st.text_input("Numero y'Indangamuntu (ID)")
-            full_name = st.text_input
+            full_name = st.text_input("Amazina Yombi ya Umukozi *")
+            phone = st.text_input("Numero ya Telefoni")
+            position = st.text_input("Umwanya (Position / Urugero: Umutetsi, Umuzamu...)")
+        with col2:
+            contract_type = st.selectbox("Ibwoko bw'Amasezerano", ["CDI (Permanent)", "CDD (Amasezerano y'Igihe)"])
+            basic_salary = st.number_input("Umushahara w'Ibanze (Basic Salary Frw)", min_value=0.0, step=1000.0)
+            start_date = st.date_input("Itariki y'Itangiriro")
+            end_date = st.date_input("Itariki y'Iherezo (Niba ari CDD)")
+
+        if st.button("💾 Bika Amasezerano y'Umukozi"):
+            if full_name:
+                try:
+                    conn = sqlite3.connect(DB_FILE)
+                    c = conn.cursor()
+                    start_str = start_date.strftime("%Y-%m-%d") if start_date else None
+                    end_str = end_date.strftime("%Y-%m-%d") if contract_type != "CDI (Permanent)" and end_date else "N/A"
+                    
+                    c.execute('''
+                        INSERT INTO employees (emp_id, full_name, phone, position, contract_type, basic_salary, start_date, end_date)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (emp_id, full_name, phone, position, contract_type, basic_salary, start_str, end_str))
+                    
+                    conn.commit()
+                    conn.close()
+                    st.success(f"Amasezerano ya **{full_name}** abikiwe neza muri Sisitemu!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Harimo ikosa mu kubika: {e}")
+            else:
+                st.warning("Uzuza nibura Izina ry'umukozi!")
+
+# ---------------------------------------------------------
+# 6. PAYROLL / IMISHAHARA
+# ---------------------------------------------------------
+elif menu == "Payroll / Imishahara":
+    st.title("💰 Icungamutungo ry'Imishahara (Payroll)")
+    st.markdown("---")
+    
+    tab_p1, tab_p2 = st.tabs(["📋 Urutonde rw'Imishahara Zatanzwe", "➕ Tunganya Umushahara Mushya"])
+    
+    with tab_p1:
+        st.subheader("Imishahara yanditswe muri Sisitemu")
+        conn = sqlite3.connect(DB_FILE)
+        df_pay = pd.read_sql_query("SELECT * FROM payroll", conn)
+        conn.close()
+        
+        if df_pay.empty:
+            st.info("Nta mishahara irandikwa cyangwa ngo itangwe.")
+        else:
+            st.dataframe(df_pay, use_container_width=True)
+            df_pay_export = df_pay[['month_year', 'full_name', 'basic_salary', 'allowances', 'pension', 'cbhi', 'maternity', 'other_loans', 'total_deductions', 'net_salary', 'payment_date']].copy()
+            df_pay_export.columns = [
+                "Ukwezi n'Umwaka", "Amazina y'Umukozi", "Basic Salary (Frw)", "Allowances (Frw)", 
+                "Pension (6%)", "CBHI (0.5%)", "Maternity (0.3%)", "Ibindi Bikatwa", 
+                "Total Deductions", "Net Salary (Frw)", "Itariki yo Kwishyura"
+            ]
+            
+            excel_pay = generate_colored_excel(df_pay_export, sheet_name="Payroll_RSSB")
+            st.download_button(
+                label="📥 Kurura Raporo y'Imishahara ya RSSB (Professional Excel ya Color)",
+                data=excel_pay,
+                file_name=f"GS_Rurembo_Payroll_{datetime.date.today()}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+            
+    with tab_p2:
+        st.subheader("Tunganya no Kubika Umushahara (Pension 6%, CBHI 0.5%, Maternity 0.3%)")
+        conn = sqlite3.connect(DB_FILE)
+        df_emp = pd.read_sql_query("SELECT * FROM employees", conn)
+        conn.close()
+        
+        if df_emp.empty:
+            st.warning("Banza wandike abakozi muri 'Abakozi n'Amasezerano' kugira ngo ubone uko ubahemba.")
+        else:
+            selected_emp = st.selectbox("Hitamo Umukozi", df_emp['full_name'].tolist())
+            emp_row = df_emp[df_emp['full_name'] == selected_emp].iloc[0]
+            default_salary = float(emp_row['basic_salary']) if 'basic_salary' in emp_row else 0.0
+            
+            c1, c2 = st.columns(2)
+            with c1:
+                month_year = st.text_input("Ukwezi n'Umwaka (Urugero: October 2026)")
+                basic_salary = st.number_input("Umushahara w'Ibanze (Basic Salary Frw)", value=default_salary, step=1000.0)
+                allowances = st.number_input("Inyongera / Agahimbazamusyi (Allowances Frw)", min_value=0.0, step=500.0)
+            with c2:
+                auto_pension = basic_salary * 0.06
+                pension_deduction = st.number_input("Pension (RSSB Pension 6%)", value=float(auto_pension), step=100.0)
+                
+                auto_cbhi = basic_salary * 0.005
+                cbhi_deduction = st.number_input("CBHI / Mituweli (0.5%)", value=float(auto_cbhi), step=50.0)
+                
+                auto_maternity = basic_salary * 0.003
+                maternity_deduction = st.number_input("Maternity Leave Contribution (0.3%)", value=float(auto_maternity), step=50.0)
+                
+                other_loans = st.number_input("Ibindi bikatwa (Loans / Advance Frw)", min_value=0.0, step=500.0)
+                payment_date = st.date_input("Itariki yo Kwishyura")
+                
+                total_deductions = pension_deduction + cbhi_deduction + maternity_deduction + other_loans
+                net_salary = (basic_salary + allowances) - total_deductions
+                
+                st.info(f"**Igiteranyo cy'Ibyakatwe (Total Deductions):** {total_deductions:,.2f} Frw")
+                st.info(f"**Umushahara w'Umusaruro (Net Salary):** {net_salary:,.2f} Frw")
+                
+            if st.button("💾 Bika Umushahara n'Imisanzu"):
+                if month_year:
+                    try:
+                        conn = sqlite3.connect(DB_FILE)
+                        c = conn.cursor()
+                        c.execute('''
+                            INSERT INTO payroll (month_year, full_name, basic_salary, allowances, pension, cbhi, maternity, other_loans, total_deductions, net_salary, payment_date)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (month_year, selected_emp, basic_salary, allowances, pension_deduction, cbhi_deduction, maternity_deduction, other_loans, total_deductions, net_salary, payment_date.strftime("%Y-%m-%d")))
+                        conn.commit()
+                        conn.close()
+                        st.success(f"Umushahara wa **{selected_emp}** w'ukwezi kwa **{month_year}** ubikiwe neza!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Harimo ikosa: {e}")
+                else:
+                    st.warning("Andika ukwezi n'umwaka!")
+
+# ---------------------------------------------------------
+# 7. RAPORO
+# ---------------------------------------------------------
+elif menu == "Raporo":
+    st.title("📊 Raporo n'Imbonerahamwe")
+    st.info("Aha haba hari raporo zose no gukurura amakuru ya GS Rurembo.")
