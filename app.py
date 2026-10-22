@@ -275,17 +275,16 @@ elif menu == "👨‍💼 Abakozi n'Amasezerano":
             if st.button("Bika Umukozi"):
                 if full_name:
                     supabase.table("employees").insert({
-    "name": name,
-    "position": position,
-    "phone": phone,
-    "start_date": start_date,
-    "end_date": end_date
-}).execute()
-                        "emp_id": emp_id, "full_name": full_name, "phone": phone,
-                        "position": position, "contract_type": contract_type,
-                        "basic_salary": basic_salary, "start_date": str(start_date),
-                        "end_date": str(end_date) if contract_type != "CDI (Permanent)" else "N/A"
-                    try:
+                "emp_id": emp_id,
+                "full_name": full_name,
+                "phone": phone,
+                "position": position,
+                "contract_type": contract_type,
+                "basic_salary": basic_salary,
+                "start_date": str(start_date),
+                "end_date": str(end_date) if contract_type != "CDI (Permanent)" else None
+            }).execute()
+            st.success("Umukozi abitswe neza!")
     response = supabase.table("izina_ry_itable").select("*").execute()
 except Exception as e:
     st.error(f"Harabaye ikosa mu gufata amakuru muri Supabase: {e}")
