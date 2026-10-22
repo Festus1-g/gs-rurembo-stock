@@ -279,7 +279,10 @@ elif menu == "👨‍💼 Abakozi n'Amasezerano":
                         "position": position, "contract_type": contract_type,
                         "basic_salary": basic_salary, "start_date": str(start_date),
                         "end_date": str(end_date) if contract_type != "CDI (Permanent)" else "N/A"
-                    }).execute()
+                    try:
+    response = supabase.table("izina_ry_itable").select("*").execute()
+except Exception as e:
+    st.error(f"Harabaye ikosa mu gufata amakuru muri Supabase: {e}")
                     st.success("Umukozi yanditswe neza!")
                     st.rerun()
     st.subheader("📄 Urutonde rw'Amasezerano")
