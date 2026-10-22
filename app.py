@@ -288,8 +288,6 @@ elif menu == "👥 Abakozi n'Amasezerano":
                     st.success("Umukozi abitswe neza!")
                 except Exception as e:
                     st.error(f"Habaye ikosa mu kubika umukozi: {e}")
-                        st.error(f"Habaye ikosa mu kubika umukozi: {e}")
-                    st.error(f"Habaye ikosa mu kubika umukozi: {e}")
                     st.rerun()
     st.subheader("📄 Urutonde rw'Amasezerano")
     df_emp = fetch_data("employees")
