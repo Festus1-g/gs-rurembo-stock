@@ -57,7 +57,7 @@ def init_db():
         )
     ''')
     
-    # Table ya Payroll (Imishahara & RSSB)
+    # Table ya Payroll (Imishahara & RSSB / CBHI)
     c.execute('''
         CREATE TABLE IF NOT EXISTS payroll (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -360,7 +360,7 @@ elif menu == "Abakozi n'Amasezerano":
                 st.warning("Uzuza nibura Izina ry'umukozi!")
 
 # ---------------------------------------------------------
-# 6. PAYROLL / IMISHAHARA (WITH PENSION 6%, CBHI, MATERNITY)
+# 6. PAYROLL / IMISHAHARA (PENSION 6%, CBHI 0.5%, MATERNITY 0.3%)
 # ---------------------------------------------------------
 elif menu == "Payroll / Imishahara":
     st.title("💰 Icungamutungo ry'Imishahara (Payroll)")
@@ -382,7 +382,7 @@ elif menu == "Payroll / Imishahara":
             st.download_button("📥 Kurura Raporo y'Imishahara (CSV)", data=csv_pay, file_name="Imishahara_GS_Rurembo.csv", mime="text/csv")
             
     with tab_p2:
-        st.subheader("Tunganya no Kubika Umushahara n'Imisanzu (Pension 6%, CBHI, Maternity Leave)")
+        st.subheader("Tunganya no Kubika Umushahara (Pension 6%, CBHI 0.5%, Maternity 0.3%)")
         conn = sqlite3.connect(DB_FILE)
         df_emp = pd.read_sql_query("SELECT * FROM employees", conn)
         conn.close()
@@ -405,24 +405,25 @@ elif menu == "Payroll / Imishahara":
                 auto_pension = basic_salary * 0.06
                 pension_deduction = st.number_input("Pension (RSSB Pension 6%)", value=float(auto_pension), step=100.0)
                 
-                # 2. CBHI (Mituweli / Ubwishingizi)
-                cbhi_deduction = st.number_input("CBHI / Ubwishingizi bw'Indwara (Frw)", value=0.0, step=100.0)
+                # 2. CBHI (0.5% ya Basic Salary)
+                auto_cbhi = basic_salary * 0.005
+                cbhi_deduction = st.number_input("CBHI / Mituweli (0.5%)", value=float(auto_cbhi), step=50.0)
                 
                 # 3. Maternity Leave Contribution (0.3%)
                 auto_maternity = basic_salary * 0.003
-                maternity_deduction = st.number_input("Maternity Leave Contribution (Frw)", value=float(auto_maternity), step=50.0)
+                maternity_deduction = st.number_input("Maternity Leave Contribution (0.3%)", value=float(auto_maternity), step=50.0)
                 
                 other_loans = st.number_input("Ibindi bikatwa (Loans / Advance Frw)", min_value=0.0, step=500.0)
                 payment_date = st.date_input("Itariki yo Kwishyura")
                 
-                # Calculation of Total Deductions & Net Salary
+                # Igiteranyo cy'Ibyakatwe cyose & Net Salary
                 total_deductions = pension_deduction + cbhi_deduction + maternity_deduction + other_loans
                 net_salary = (basic_salary + allowances) - total_deductions
                 
                 st.info(f"**Igiteranyo cy'Ibyakatwe (Total Deductions):** {total_deductions:,.2f} Frw")
                 st.info(f"**Umushahara w'Umusaruro (Net Salary):** {net_salary:,.2f} Frw")
                 
-            if st.button("💾 Bika Umushahara n'Imisanzu ya RSSB"):
+            if st.button("💾 Bika Umushahara n'Imisanzu"):
                 if month_year:
                     try:
                         conn = sqlite3.connect(DB_FILE)
@@ -433,7 +434,7 @@ elif menu == "Payroll / Imishahara":
                         ''', (month_year, selected_emp, basic_salary, allowances, pension_deduction, cbhi_deduction, maternity_deduction, other_loans, total_deductions, net_salary, payment_date.strftime("%Y-%m-%d")))
                         conn.commit()
                         conn.close()
-                        st.success(f"Umushahara wa **{selected_emp}** w'ukwezi kwa **{month_year}** ubarweho RSSB neza!")
+                        st.success(f"Umushahara wa **{selected_emp}** w'ukwezi kwa **{month_year}** hamwe na CBHI (0.5%) ubarwe neza!")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Harimo ikosa: {e}")
