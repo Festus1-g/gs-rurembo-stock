@@ -275,6 +275,12 @@ elif menu == "👨‍💼 Abakozi n'Amasezerano":
             if st.button("Bika Umukozi"):
                 if full_name:
                     supabase.table("employees").insert({
+    "name": name,
+    "position": position,
+    "phone": phone,
+    "start_date": start_date,
+    "end_date": end_date
+}).execute()
                         "emp_id": emp_id, "full_name": full_name, "phone": phone,
                         "position": position, "contract_type": contract_type,
                         "basic_salary": basic_salary, "start_date": str(start_date),
