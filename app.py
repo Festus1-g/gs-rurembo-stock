@@ -108,7 +108,6 @@ def generate_colored_excel(df, sheet_name="Report"):
 
         from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 
-        # Mutwe w'imbonerahamwe (Dark Blue & White Bold Text)
         header_fill = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
         header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
         
@@ -121,14 +120,12 @@ def generate_colored_excel(df, sheet_name="Report"):
         data_font = Font(name="Calibri", size=11)
         zebra_fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
 
-        # Gusiga amabara kuri Header
         for col_num in range(1, len(df.columns) + 1):
             cell = worksheet.cell(row=1, column=col_num)
             cell.fill = header_fill
             cell.font = header_font
             cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
-        # Gusiga amabara ku mirongo y'amakuru
         for row_num in range(2, len(df) + 2):
             for col_num in range(1, len(df.columns) + 1):
                 cell = worksheet.cell(row=row_num, column=col_num)
@@ -138,7 +135,6 @@ def generate_colored_excel(df, sheet_name="Report"):
                 if row_num % 2 == 0:
                     cell.fill = zebra_fill
 
-        # Kwagura inkingi mu buryo bw'wikora (Auto-fit Columns)
         for col in worksheet.columns:
             max_len = max(len(str(cell.value or '')) for cell in col)
             col_letter = col[0].column_letter
@@ -235,7 +231,6 @@ elif menu == "Gucunga Stock / Ububiko":
             st.info("Nta gicuruzwa kiragera muri stock.")
         else:
             st.dataframe(df_stock, use_container_width=True)
-            
             df_export = df_stock[['item_name', 'category', 'quantity', 'unit']].copy()
             df_export.columns = ["Izina ry'Igicuruzwa", "Icyiciro (Category)", "Ingano (Quantity)", "Igipimo (Unit)"]
             
@@ -303,4 +298,91 @@ elif menu == "Gucunga Stock / Ububiko":
                     item_info = df_stock[df_stock['item_name'] == selected_item].iloc[0]
                     available_qty = item_info['quantity']
                     
-                    if
+                    if req_qty > available_qty:
+                        st.error(f"Ingano usaba ({req_qty}) iraruta iyiri muri stock ({available_qty} {item_info['unit']})!")
+                    else:
+                        conn = sqlite3.connect(DB_FILE)
+                        c = conn.cursor()
+                        today = datetime.date.today().strftime("%Y-%m-%d")
+                        c.execute('''
+                            INSERT INTO stock_requests (requester_name, item_name, requested_qty, reason, status, request_date)
+                            VALUES (?, ?, ?, ?, 'PENDING', ?)
+                        ''', (requester_name, selected_item, int(req_qty), reason, today))
+                        conn.commit()
+                        conn.close()
+                        st.success("Ubusabe bwawe bwoherejwe neza! Mutegereze approval.")
+                        st.rerun()
+                else:
+                    st.warning("Uzuza izina ry'usaba n'igicuruzwa!")
+
+    with tab_s4:
+        st.subheader("✅ Approve cyangwa Reject Ubusabe bw'Ibyasabwe")
+        conn = sqlite3.connect(DB_FILE)
+        df_pending = pd.read_sql_query("SELECT * FROM stock_requests WHERE status = 'PENDING'", conn)
+        conn.close()
+        
+        if df_pending.empty:
+            st.info("Nta busabe bw'ibintu buri gukenera Approval ubu.")
+        else:
+            st.dataframe(df_pending, use_container_width=True)
+            for idx, row in df_pending.iterrows():
+                with st.expander(f"📌 Request #{row['id']}: {row['requester_name']} asaba {row['requested_qty']} {row['item_name']}"):
+                    st.write(f"**Impamvu:** {row['reason']}")
+                    st.write(f"**Itariki:** {row['request_date']}")
+                    btn_col1, btn_col2 = st.columns(2)
+                    with btn_col1:
+                        if st.button(f"✅ Approve #{row['id']}", key=f"app_{row['id']}"):
+                            conn = sqlite3.connect(DB_FILE)
+                            c = conn.cursor()
+                            c.execute("UPDATE stock SET quantity = quantity - ? WHERE item_name = ?", (row['requested_qty'], row['item_name']))
+                            c.execute("UPDATE stock_requests SET status = 'APPROVED' WHERE id = ?", (row['id'],))
+                            conn.commit()
+                            conn.close()
+                            st.success("Ubusabe bwemejwe kandi inano yakatwe muri Stock Balance!")
+                            st.rerun()
+                    with btn_col2:
+                        if st.button(f"❌ Reject #{row['id']}", key=f"rej_{row['id']}"):
+                            conn = sqlite3.connect(DB_FILE)
+                            c = conn.cursor()
+                            c.execute("UPDATE stock_requests SET status = 'REJECTED' WHERE id = ?", (row['id'],))
+                            conn.commit()
+                            conn.close()
+                            st.warning("Ubusabe bwanzwe (Rejected).")
+                            st.rerun()
+
+# ---------------------------------------------------------
+# 5. ABAKOZI N'AMASEZERANO
+# ---------------------------------------------------------
+elif menu == "Abakozi n'Amasezerano":
+    st.title("👨‍💼 Icungamutungo ry'Abakozi n'Amasezerano")
+    st.markdown("---")
+    
+    tab1, tab2 = st.tabs(["📄 Urutonde rw'Amasezerano", "➕ Kurema & Kubika Amasezerano"])
+    
+    with tab1:
+        st.subheader("📋 Urutonde rw'Abakozi na Amasezerano")
+        conn = sqlite3.connect(DB_FILE)
+        df_emp = pd.read_sql_query("SELECT * FROM employees", conn)
+        conn.close()
+        
+        if df_emp.empty:
+            st.info("Nta mukozi urabandikwa muri sisitemu.")
+        else:
+            st.dataframe(df_emp, use_container_width=True)
+            df_emp_export = df_emp[['emp_id', 'full_name', 'phone', 'position', 'contract_type', 'basic_salary', 'start_date', 'end_date']].copy()
+            df_emp_export.columns = ["Indangamuntu (ID)", "Amazina Yombi", "Telefoni", "Umwanya", "Amasezerano", "Umushahara w'Ibanze", "Itariki y'Itangiriro", "Itariki y'Iherezo"]
+            
+            excel_emp = generate_colored_excel(df_emp_export, sheet_name="Abakozi")
+            st.download_button(
+                label="📥 Kurura Urutonde rw'Abakozi (Professional Excel ya Color)",
+                data=excel_emp,
+                file_name=f"GS_Rurembo_Abakozi_{datetime.date.today()}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
+    with tab2:
+        st.subheader("✍️ Form yo Kwandika no Kubika Amasezerano y'Umukozi")
+        col1, col2 = st.columns(2)
+        with col1:
+            emp_id = st.text_input("Numero y'Indangamuntu (ID)")
+            full_name = st.text_input
