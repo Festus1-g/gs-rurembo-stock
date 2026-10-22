@@ -11,9 +11,9 @@ st.set_page_config(
     layout="wide"
 )
 
-# Amadosiye ya Excel abikamo amakuru
-FILE_ABAKOZI = "abakozi.xlsx"
-FILE_STOCK = "stock.xlsx"
+# Amadosiye ya CSV abikamo amakuru (Yikoresha neza kuri Streamlit Cloud)
+FILE_ABAKOZI = "abakozi.csv"
+FILE_STOCK = "stock.csv"
 
 # Gukora idosiye y'Abakozi niba itariko
 if not os.path.exists(FILE_ABAKOZI):
@@ -21,12 +21,12 @@ if not os.path.exists(FILE_ABAKOZI):
         "Indangamuntu (ID)", "Amazina Yombi", "Umurimo / Post", 
         "Telefoni", "Umushahara (Frw)", "Itariki Amasezerano Atangirira"
     ])
-    df_abakozi.to_excel(FILE_ABAKOZI, index=False, engine="openpyxl")
+    df_abakozi.to_csv(FILE_ABAKOZI, index=False)
 
 # Gukora idosiye ya Stock niba itariko
 if not os.path.exists(FILE_STOCK):
     df_stock = pd.DataFrame(columns=["Izina ry'Ibicuruzwa", "Ingano (Quantity)", "Igiciro (Frw)"])
-    df_stock.to_excel(FILE_STOCK, index=False, engine="openpyxl")
+    df_stock.to_csv(FILE_STOCK, index=False)
 
 
 # ---------------------------------------------------------
@@ -66,22 +66,22 @@ if menu == "Abakozi n'Amasezerano":
     
     # TAB 1: Urutonde rw'Abakozi
     with tab1:
-        st.subheader("Urutonde rw'Abakozi Basanzwe Muri Excel")
+        st.subheader("Urutonde rw'Abakozi Basanzwe")
         try:
-            df_abakozi = pd.read_excel(FILE_ABAKOZI, engine="openpyxl")
+            df_abakozi = pd.read_csv(FILE_ABAKOZI)
             if df_abakozi.empty:
                 st.warning("Nta mukozi urabandikwa muri sisitemu.")
             else:
                 st.dataframe(df_abakozi, use_container_width=True)
                 
-                # Button yo gukurura Excel
-                with open(FILE_ABAKOZI, "rb") as f:
-                    st.download_button(
-                        label="📥 Kurura Urutonde lwa Excel (Download)",
-                        data=f,
-                        file_name="Abakozi_GS_Rurembo.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
+                # Button yo gukurura idosiye mu buryo bwa CSV (Ihungukira mu Excel)
+                csv_data = df_abakozi.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="📥 Kurura Urutonde (Download CSV / Excel)",
+                    data=csv_data,
+                    file_name="Abakozi_GS_Rurembo.csv",
+                    mime="text/csv"
+                )
         except Exception as e:
             st.error(f"Harimo ikosa mu gusoma idosiye: {e}")
 
@@ -102,13 +102,13 @@ if menu == "Abakozi n'Amasezerano":
                 umushahara = st.number_input("Umushahara w'Ukwezi (Frw)", min_value=0, step=1000)
                 date_start = st.date_input("Itariki y'Amasezerano")
             
-            btn_save = st.form_submit_button("💾 Bika Umukozi muri Excel")
+            btn_save = st.form_submit_button("💾 Bika Umukozi")
             
             if btn_save:
                 if not amazina or not id_no:
                     st.error("Ushobora kuba wataye Amazina cyangwa Indangamuntu! Nyamuneka uzuzuze.")
                 else:
-                    df_old = pd.read_excel(FILE_ABAKOZI, engine="openpyxl")
+                    df_old = pd.read_csv(FILE_ABAKOZI)
                     new_data = pd.DataFrame([{
                         "Indangamuntu (ID)": str(id_no),
                         "Amazina Yombi": amazina,
@@ -119,9 +119,9 @@ if menu == "Abakozi n'Amasezerano":
                     }])
                     
                     df_updated = pd.concat([df_old, new_data], ignore_index=True)
-                    df_updated.to_excel(FILE_ABAKOZI, index=False, engine="openpyxl")
+                    df_updated.to_csv(FILE_ABAKOZI, index=False)
                     
-                    st.success(f"Umukozi **{amazina}** yabitswe neza muri Excel!")
+                    st.success(f"Umukozi **{amazina}** yabitswe neza muri sisitemu!")
                     st.rerun()
 
 # --- PAGE 2: DASHBOARD ---
@@ -131,16 +131,16 @@ elif menu == "Dashboard":
     
     col1, col2 = st.columns(2)
     with col1:
-        df_a = pd.read_excel(FILE_ABAKOZI, engine="openpyxl")
+        df_a = pd.read_csv(FILE_ABAKOZI)
         st.metric(label="Bose Hamwe Abakozi Banditse", value=len(df_a))
     with col2:
-        df_s = pd.read_excel(FILE_STOCK, engine="openpyxl")
+        df_s = pd.read_csv(FILE_STOCK)
         st.metric(label="Ibicuruzwa Biri muri Stock", value=len(df_s))
 
 # --- PAGE 3: STOCK ---
 elif menu == "Stock / Ububiko":
     st.title("📦 Gucunga Stock / Ububiko")
-    df_stock = pd.read_excel(FILE_STOCK, engine="openpyxl")
+    df_stock = pd.read_csv(FILE_STOCK)
     st.dataframe(df_stock, use_container_width=True)
 
 # --- PAGE 4: RAPORO ---
