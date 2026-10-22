@@ -1,10 +1,10 @@
 import streamlit as st
 import pandas as pd
-from supabase import create_client, Client
-import datetime
+import sqlite3
+import os
 
 # ---------------------------------------------------------
-# 1. SETUP PAGE CONFIG & SUPABASE CLIENT
+# 1. SETUP DATABASE (SQLite Local Database)
 # ---------------------------------------------------------
 st.set_page_config(
     page_title="GS Rurembo Management System",
@@ -12,22 +12,42 @@ st.set_page_config(
     layout="wide"
 )
 
-# Guhamagara Supabase Credentials muri Secrets
-try:
-    SUPABASE_URL = st.secrets["SUPABASE_URL"]
-    SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
-    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-except Exception as e:
-    st.error("Harimo ikosa mu kureba Secrets za Supabase. Reba ko SUPABASE_URL na SUPABASE_KEY birimo neza.")
+DB_FILE = "gs_rurembo.db"
 
-# Helper function yo gukurura data muri Supabase
-def fetch_data(table_name):
-    try:
-        response = supabase.table(table_name).select("*").execute()
-        return pd.DataFrame(response.data)
-    except Exception as e:
-        st.error(f"Harimo ikosa mu gusoma table ya '{table_name}': {e}")
-        return pd.DataFrame()
+def init_db():
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    
+    # Table y'abakozi
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS employees (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            emp_id TEXT,
+            full_name TEXT,
+            phone TEXT,
+            position TEXT,
+            contract_type TEXT,
+            basic_salary REAL,
+            start_date TEXT,
+            end_date TEXT
+        )
+    ''')
+    
+    # Table ya Stock
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS stock (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            item_name TEXT,
+            category TEXT,
+            quantity INTEGER,
+            unit TEXT
+        )
+    ''')
+    
+    conn.commit()
+    conn.close()
+
+init_db()
 
 # ---------------------------------------------------------
 # 2. SIDEBAR NAVIGATION
@@ -53,7 +73,7 @@ with st.sidebar:
     )
 
 # ---------------------------------------------------------
-# 3. PAGE 1: ABAKOZI N'AMASEZERANO
+# 3. ABAKOZI N'AMASEZERANO
 # ---------------------------------------------------------
 if menu == "Abakozi n'Amasezerano":
     st.title("👨‍💼 Icungamutungo ry'Abakozi n'Amasezerano")
@@ -62,14 +82,17 @@ if menu == "Abakozi n'Amasezerano":
     
     tab1, tab2 = st.tabs(["📄 Urutonde rw'Amasezerano", "➕ Wandika Umukozi Mushya"])
     
-    # TAB 1: KUREBA ABAKOZI
     with tab1:
         st.subheader("📋 Urutonde rw'Abakozi Banditse")
-        df_emp = fetch_data("employees")
-        if not df_emp.empty:
+        conn = sqlite3.connect(DB_FILE)
+        df_emp = pd.read_sql_query("SELECT * FROM employees", conn)
+        conn.close()
+        
+        if df_emp.empty:
+            st.info("Nta mukozi urabandikwa muri sisitemu.")
+        else:
             st.dataframe(df_emp, use_container_width=True)
             
-            # Button yo gukurura Excel/CSV
             csv_data = df_emp.to_csv(index=False).encode('utf-8')
             st.download_button(
                 label="📥 Kurura Urutonde (Download CSV / Excel)",
@@ -77,10 +100,7 @@ if menu == "Abakozi n'Amasezerano":
                 file_name="Abakozi_GS_Rurembo.csv",
                 mime="text/csv"
             )
-        else:
-            st.info("Nta mukozi urabandikwa muri sisitemu.")
 
-    # TAB 2: KWANDIKA UMUKOZI MUSHYA
     with tab2:
         st.subheader("✍️ Form yo Kwandika Umukozi Mushya")
         
@@ -101,45 +121,45 @@ if menu == "Abakozi n'Amasezerano":
         if st.button("💾 Bika Umukozi"):
             if full_name:
                 try:
-                    # Gucungira hafi amatariki ngo ahuye na PostgreSQL Date
-                    start_str = start_date.isoformat() if start_date else None
-                    end_str = end_date.isoformat() if contract_type != "CDI (Permanent)" and end_date else None
-
-                    supabase.table("employees").insert({
-                        "emp_id": str(emp_id),
-                        "full_name": str(full_name),
-                        "phone": str(phone),
-                        "position": str(position),
-                        "contract_type": str(contract_type),
-                        "basic_salary": float(basic_salary),
-                        "start_date": start_str,
-                        "end_date": end_str
-                    }).execute()
+                    conn = sqlite3.connect(DB_FILE)
+                    c = conn.cursor()
                     
-                    st.success(f"Umukozi **{full_name}** yanditswe neza muri Supabase!")
+                    start_str = start_date.strftime("%Y-%m-%d") if start_date else None
+                    end_str = end_date.strftime("%Y-%m-%d") if contract_type != "CDI (Permanent)" and end_date else "N/A"
+                    
+                    c.execute('''
+                        INSERT INTO employees (emp_id, full_name, phone, position, contract_type, basic_salary, start_date, end_date)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (emp_id, full_name, phone, position, contract_type, basic_salary, start_str, end_str))
+                    
+                    conn.commit()
+                    conn.close()
+                    
+                    st.success(f"Umukozi **{full_name}** yanditswe neza muri Sisitemu!")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Harimo ikosa mu kubika umukozi: {e}")
+                    st.error(f"Harimo ikosa mu kubika: {e}")
             else:
                 st.warning("Nyamuneka uzuza nibura Izina ry'umukozi!")
 
 # ---------------------------------------------------------
-# 4. PAGE 2: DASHBOARD
+# 4. DASHBOARD
 # ---------------------------------------------------------
 elif menu == "Dashboard":
     st.title("🏫 GS Rurembo - Dashboard")
-    st.write("Aha ni ku nshamake y'ibiri muri Sisitemu.")
+    conn = sqlite3.connect(DB_FILE)
+    df_emp = pd.read_sql_query("SELECT * FROM employees", conn)
+    df_stock = pd.read_sql_query("SELECT * FROM stock", conn)
+    conn.close()
     
     col1, col2 = st.columns(2)
     with col1:
-        df_a = fetch_data("employees")
-        st.metric(label="Bose Hamwe Abakozi Banditse", value=len(df_a) if not df_a.empty else 0)
+        st.metric(label="Bose Hamwe Abakozi Banditse", value=len(df_emp))
     with col2:
-        df_s = fetch_data("stock")
-        st.metric(label="Ibicuruzwa Biri muri Stock", value=len(df_s) if not df_s.empty else 0)
+        st.metric(label="Ibicuruzwa Biri muri Stock", value=len(df_stock))
 
 # ---------------------------------------------------------
-# 5. PAGE 3: STOCK / UBUBIKO
+# 5. STOCK / UBUBIKO
 # ---------------------------------------------------------
 elif menu == "Stock / Ububiko":
     st.title("📦 Gucunga Stock / Ububiko")
@@ -149,11 +169,14 @@ elif menu == "Stock / Ububiko":
     
     with tab_s1:
         st.subheader("Urutonde rw'Ibicuruzwa Biri muri Stock")
-        df_stock = fetch_data("stock")
-        if not df_stock.empty:
-            st.dataframe(df_stock, use_container_width=True)
-        else:
+        conn = sqlite3.connect(DB_FILE)
+        df_stock = pd.read_sql_query("SELECT * FROM stock", conn)
+        conn.close()
+        
+        if df_stock.empty:
             st.info("Nta gicuruzwa kiragera muri stock.")
+        else:
+            st.dataframe(df_stock, use_container_width=True)
             
     with tab_s2:
         st.subheader("Form yo Gushyira Igicuruzwa muri Stock")
@@ -170,12 +193,15 @@ elif menu == "Stock / Ububiko":
         if st.button("💾 Save Item"):
             if item_name:
                 try:
-                    supabase.table("stock").insert({
-                        "item_name": str(item_name),
-                        "category": str(category),
-                        "quantity": int(qty),
-                        "unit": str(unit)
-                    }).execute()
+                    conn = sqlite3.connect(DB_FILE)
+                    c = conn.cursor()
+                    c.execute('''
+                        INSERT INTO stock (item_name, category, quantity, unit)
+                        VALUES (?, ?, ?, ?)
+                    ''', (item_name, category, int(qty), unit))
+                    
+                    conn.commit()
+                    conn.close()
                     
                     st.success(f"Igicuruzwa **{item_name}** kiyongereye muri Stock neza!")
                     st.rerun()
@@ -185,7 +211,7 @@ elif menu == "Stock / Ububiko":
                 st.warning("Nyamuneka uzuza izina ry'igicuruzwa!")
 
 # ---------------------------------------------------------
-# 6. PAGE 4: RAPORO
+# 6. RAPORO
 # ---------------------------------------------------------
 elif menu == "Raporo":
     st.title("📊 Raporo n'Imbonerahamwe")
