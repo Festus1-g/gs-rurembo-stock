@@ -259,35 +259,35 @@ elif menu == "📌 HR Dashboard":
 
 elif menu == "👥 Abakozi n'Amasezerano":
     st.title("👥 Management y'Abakozi n'Amasezerano")
-    if st.session_state.role == "Admin":
-        with st.expander("➕ Ongeza Umukozi Gishya"):
-            c1, c2 = st.columns(2)
-            with c1:
-                emp_id = st.text_input("National ID / Code")
-                full_name = st.text_input("Amazina Yose")
-                phone = st.text_input("Telefoni")
-                position = st.text_input("Umwanya (Position)")
-            with c2:
-                contract_type = st.selectbox("Ubwoko bw'Amasezerano", ["CDI (Permanent)", "CDD (Temporary)"])
-                basic_salary = st.number_input("Umushahara w'Ibanze (RWF)", min_value=0.0)
-                start_date = st.date_input("Itariki y'Itangiriro")
-                end_date = st.date_input("Itariki y'Iherezo (Niba ari CDD)")
-            
-            if st.button("Bika Umukozi"):
-                if full_name:
-                    try:
-                        supabase.table("employees").insert({
-                            "emp_id": emp_id,
-                            "full_name": full_name,
-                            "phone": phone,
-                            "position": position,
-                            "contract_type": contract_type,
-                            "basic_salary": basic_salary,
-                            "start_date": str(start_date),
-                            "end_date": str(end_date) if contract_type != "CDI (Permanent)" else None
-                        }).execute()
-                        st.success("Umukozi abitswe neza!")
-                    except Exception as e:
+    with st.expander("➕ Ongeza Umukozi Gishya", expanded=True):
+        c1, c2 = st.columns(2)
+        with c1:
+            emp_id = st.text_input("National ID / Code")
+            full_name = st.text_input("Amazina Yose")
+            phone = st.text_input("Telefoni")
+            position = st.text_input("Umwanya (Position)")
+        with c2:
+            contract_type = st.selectbox("Ubwoko bw'Amasezerano", ["CDI (Permanent)", "CDD (Temporary)"])
+            basic_salary = st.number_input("Umushahara w'Ibanze (RWF)", min_value=0.0)
+            start_date = st.date_input("Itariki y'Itangiriro")
+            end_date = st.date_input("Itariki y'Iherezo (Niba ari CDD)")
+        
+        if st.button("Bika Umukozi"):
+            if full_name:
+                try:
+                    supabase.table("employees").insert({
+                        "emp_id": emp_id,
+                        "full_name": full_name,
+                        "phone": phone,
+                        "position": position,
+                        "contract_type": contract_type,
+                        "basic_salary": basic_salary,
+                        "start_date": str(start_date),
+                        "end_date": str(end_date) if contract_type != "CDI (Permanent)" else None
+                    }).execute()
+                    st.success("Umukozi abitswe neza!")
+                except Exception as e:
+                    st.error(f"Habaye ikosa mu kubika umukozi: {e}")
                         st.error(f"Habaye ikosa mu kubika umukozi: {e}")
                     st.error(f"Habaye ikosa mu kubika umukozi: {e}")
                     st.rerun()
